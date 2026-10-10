@@ -2,9 +2,8 @@ import { RuleTester } from 'eslint';
 import { afterAll, describe, it } from 'vitest';
 import { moduleBoundaries } from './module-boundaries.mjs';
 
-RuleTester.afterAll = afterAll;
-RuleTester.describe = describe;
-RuleTester.it = it;
+// Integra o RuleTester ao Vitest (os tipos do ESLint não declaram estes ganchos estáticos).
+Object.assign(RuleTester, { afterAll, describe, it });
 
 const tester = new RuleTester({ languageOptions: { ecmaVersion: 2022, sourceType: 'module' } });
 const arquivo = (modulo: string, nome = 'application/servico.ts') => `/repo/apps/api/src/modules/${modulo}/${nome}`;
