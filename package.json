@@ -1,0 +1,21 @@
+{
+  "name": "soscomida",
+  "private": true,
+  "packageManager": "pnpm@10.30.3",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "dev:infra": "docker compose -f infra/docker/compose.dev.yml up -d --wait",
+    "dev:infra:down": "docker compose -f infra/docker/compose.dev.yml down"
+  },
+  "devDependencies": {
+    "turbo": "^2.11.7",
+    "typescript": "^5.9.3"
+  }
+}

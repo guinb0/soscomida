@@ -1,0 +1,13 @@
+{
+  "identities": [
+    {
+      "name": "soscomida",
+      "credentials": [{ "accessKey": "soscomida", "secretKey": "soscomida_dev" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    },
+    {
+      "name": "anonymous",
+      "actions": ["Read:soscomida-public"]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "extends": "@soscomida/config/tsconfig.base.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node10",
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": []
+  },
+  "include": [
+    "src"
+  ]
+}

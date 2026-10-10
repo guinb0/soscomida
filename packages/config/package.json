@@ -1,0 +1,19 @@
+{
+  "name": "@soscomida/config",
+  "version": "0.0.0",
+  "private": true,
+  "files": ["tsconfig.base.json", "tsconfig.node.json", "eslint.base.mjs"],
+  "exports": {
+    "./tsconfig.base.json": "./tsconfig.base.json",
+    "./tsconfig.node.json": "./tsconfig.node.json",
+    "./eslint": "./eslint.base.mjs"
+  },
+  "dependencies": {
+    "@eslint/js": "^10.0.1",
+    "globals": "^17.13.0",
+    "typescript-eslint": "^8.71.1"
+  },
+  "peerDependencies": {
+    "eslint": "^10.0.0"
+  }
+}

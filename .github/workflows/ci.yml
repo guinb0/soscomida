@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: soscomida
+          POSTGRES_PASSWORD: soscomida_dev
+          POSTGRES_DB: soscomida_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U soscomida" --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
+
+    env:
+      TEST_DATABASE_URL: postgres://soscomida:soscomida_dev@localhost:5432/soscomida_test
+      TEST_REDIS_URL: redis://localhost:6379/1
+      TURBO_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test

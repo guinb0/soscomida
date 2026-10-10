@@ -1,0 +1,15 @@
+{
+  "extends": "@soscomida/config/tsconfig.base.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node10",
+    "outDir": "dist",
+    "rootDir": ".",
+    "types": ["node"],
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "strictPropertyInitialization": false,
+    "isolatedModules": false
+  },
+  "include": ["src", "test", "eslint", "vitest.config.mts", "drizzle.config.ts"]
+}
