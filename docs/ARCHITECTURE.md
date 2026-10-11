@@ -268,7 +268,7 @@ packages/
   shared/              dinheiro, CPF/CNPJ, chave de acesso — funções puras
 infra/
   docker/              compose de dev e de produção, Dockerfiles
-  scripts/             backup, restore, seed de dev
+  scripts/             backup e restore do banco
   monitoring/          Prometheus e alertas
 docs/                  este documento, ADRs, runbooks
 tests/e2e/             Playwright (fluxos ponta a ponta)

@@ -7,7 +7,7 @@
 | Unitário e propriedades | `packages/*/src/**/*.test.ts`, `apps/api/src/**/*.test.ts` | Vitest + fast-check | nada |
 | Regras de lint próprias | `apps/api/eslint/*.test.ts` | RuleTester do ESLint | nada |
 | Integração (API real) | `apps/api/test/**/*.int.test.ts` | Vitest + supertest | Postgres e Redis |
-| Ponta a ponta | `tests/e2e` | Playwright | stack completa (Fase 1+) |
+| Ponta a ponta | `tests/e2e` (**ainda não existe**, previsto na Fase 2) | Playwright | stack completa |
 
 Os testes de integração sobem o `AppModule` inteiro (guards, filtros,
 validação) e falam HTTP com ele. Nada de banco em memória: dinheiro e

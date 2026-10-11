@@ -29,6 +29,7 @@ export function baseConfig({ tsconfigRootDir }) {
       rules: {
         // supertest e o Nest devolvem `any` em getHttpServer()/body.
         '@typescript-eslint/no-unsafe-argument': 'off',
+        '@typescript-eslint/no-unsafe-call': 'off',
         '@typescript-eslint/no-unsafe-assignment': 'off',
         '@typescript-eslint/no-unsafe-member-access': 'off',
         '@typescript-eslint/no-non-null-assertion': 'off',

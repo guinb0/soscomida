@@ -14,7 +14,6 @@
     "test:integration": "vitest run --project integration",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --env-file-if-exists=.env dist/infra/db/migrate.js",
-    "db:seed": "node --env-file-if-exists=.env dist/infra/db/seed.js",
     "grant-role": "node --env-file-if-exists=.env dist/cli/grant-role.js"
   },
   "dependencies": {

@@ -32,7 +32,6 @@ cp apps/api/.env.example apps/api/.env       # e preencha MFA_ENCRYPTION_KEY (co
 cp apps/web/.env.example apps/web/.env
 pnpm build
 pnpm --filter @soscomida/api db:migrate
-pnpm --filter @soscomida/api db:seed         # dados de demonstração (opcional)
 pnpm dev                                     # web :3000, API :4000, worker
 ```
 

@@ -1,0 +1,8 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
+
+/** Comparação em tempo constante (inclusive para tamanhos diferentes). */
+export function constantTimeEquals(a: string, b: string): boolean {
+  const ha = createHash('sha256').update(a).digest();
+  const hb = createHash('sha256').update(b).digest();
+  return timingSafeEqual(ha, hb) && a.length === b.length;
+}

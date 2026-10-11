@@ -1,0 +1,88 @@
+@import 'tailwindcss';
+
+/*
+ * Design system SOS Comida (portado do front anterior). A paleta vem do logo:
+ * uma figura azul-céu e uma amarelo-sol abraçando frutas (maçã, melancia,
+ * banana). Neutros quentes: tinta azul-petróleo sobre papel creme.
+ */
+@theme {
+  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-baloo), var(--font-nunito), ui-sans-serif, sans-serif;
+
+  --color-sky-50: #ecfaff;
+  --color-sky-100: #d7f3fd;
+  --color-sky-200: #b0e8fb;
+  --color-sky-300: #80ddf9;
+  --color-sky-400: #52ccef;
+  --color-sky-500: #26b4e0;
+  --color-sky-600: #1493c2;
+  --color-sky-700: #12759c;
+  --color-sky-800: #155f7e;
+  --color-sky-900: #164e68;
+
+  --color-sun-50: #fffaeb;
+  --color-sun-100: #fff2c9;
+  --color-sun-200: #ffe07a;
+  --color-sun-300: #ffd34e;
+  --color-sun-400: #fbc02d;
+  --color-sun-500: #f0a80f;
+  --color-sun-600: #cc8506;
+  --color-sun-700: #a3630a;
+  --color-sun-800: #864e10;
+
+  --color-maca-50: #fef3f2;
+  --color-maca-100: #fde6e4;
+  --color-maca-200: #fbcdc9;
+  --color-maca-500: #f2645c;
+  --color-maca-600: #dc4a41;
+  --color-maca-700: #c23c34;
+  --color-maca-800: #9e332d;
+
+  --color-melancia-50: #f2faef;
+  --color-melancia-100: #e7f5e2;
+  --color-melancia-200: #cfe9c6;
+  --color-melancia-500: #66bd57;
+  --color-melancia-600: #4f9d43;
+  --color-melancia-700: #3f7a33;
+  --color-melancia-800: #366328;
+
+  --color-ink-50: #fdf6ea;
+  --color-ink-100: #f6efe2;
+  --color-ink-200: #ece3d2;
+  --color-ink-300: #bccad0;
+  --color-ink-400: #94a8b1;
+  --color-ink-500: #6b8590;
+  --color-ink-600: #4c6b78;
+  --color-ink-700: #2e5766;
+  --color-ink-800: #1f4553;
+  --color-ink-900: #163541;
+
+  --color-paper: #fffbf4;
+  --color-paper-2: #fdf6ea;
+  --color-surface: #ffffff;
+  --color-line: #ece3d2;
+  --color-line-strong: #ddd0b8;
+
+  --radius-card: 1.25rem;
+  --shadow-soft: 0 1px 2px rgb(22 53 65 / 0.06), 0 4px 16px rgb(22 53 65 / 0.06);
+  --shadow-lift: 0 2px 4px rgb(22 53 65 / 0.08), 0 12px 32px rgb(22 53 65 / 0.1);
+}
+
+@layer base {
+  html {
+    background: var(--color-paper);
+    color: var(--color-ink-900);
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-sky-400);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

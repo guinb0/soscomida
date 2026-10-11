@@ -20,14 +20,16 @@ de moderador exige MFA e que import cruzando fronteira de módulo quebra o lint.
 
 ## Fase 1 — MVP de campanhas e doações
 
-- [ ] Campanhas: CRUD do organizador, categorias, orçamento por categoria, imagens por upload assinado, máquina de estados formal com histórico
-- [ ] Moderação: fila, assumir caso, aprovar, pedir ajustes, suspender com justificativa
-- [ ] Catálogo público com busca, filtros e página de campanha com SSR/ISR
-- [ ] Doação Pix: intenção idempotente, cobrança no provedor, QR Code, expiração, webhook idempotente, confirmação consultando o provedor
-- [ ] Ledger de dupla entrada com testes de propriedade
-- [ ] Painel do doador (minhas doações) e do organizador (arrecadação)
-- [ ] Transparência v1: arrecadação confirmada, tarifas, estornos, orçamento planejado
-- [ ] Notificações por e-mail (doação confirmada, campanha aprovada) — log em dev
+- [x] Campanhas: CRUD do organizador, categorias, orçamento por categoria, imagens por upload assinado, máquina de estados formal com histórico
+- [x] Moderação: fila, assumir caso, aprovar, pedir ajustes, suspender com justificativa
+- [x] Catálogo público com busca, filtros e página de campanha com SSR (dados em cache de 30–60 s)
+- [x] Doação Pix: intenção idempotente, cobrança no provedor, QR Code, expiração, webhook idempotente, confirmação consultando o provedor
+- [x] Ledger de dupla entrada com testes de propriedade
+- [x] Painel do doador (minhas doações) e do organizador (arrecadação)
+- [x] Transparência v1: arrecadação confirmada, tarifas, estornos, orçamento planejado
+- [ ] Notificações por e-mail (doação confirmada, campanha aprovada) — log em dev — **não feito**: fica para o início da Fase 2 (os eventos já existem no outbox; falta o consumidor e o provedor de e-mail)
+
+**Situação (2026-10-11):** critérios 1–6 cobertos por testes de integração (92 testes na API) e por um teste de fumaça manual da stack completa pelo navegador/proxy (cadastro → campanha com imagem → moderação com MFA → Pix simulado → transparência). Critério 7: fluxo `dev` verificado; `asaas` sandbox **não verificado** (aguarda credenciais).
 
 **Critérios de aceitação do MVP:**
 

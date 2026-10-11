@@ -8,6 +8,13 @@
       "when": 1791668141535,
       "tag": "0000_fundacao",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791670073769,
+      "tag": "0001_campanhas_doacoes_ledger",
+      "breakpoints": true
     }
   ]
 }

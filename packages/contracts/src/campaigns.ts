@@ -126,6 +126,7 @@ export type CampaignDetail = z.infer<typeof campaignDetailSchema>;
 /** Visão do organizador: inclui rascunho, versão e retorno da moderação. */
 export const ownedCampaignSchema = campaignDetailSchema.extend({
   version: z.number().int(),
+  images: z.array(z.object({ fileId: z.uuid(), url: z.string() })),
   moderationNote: z.string().nullable(),
   allowedActions: z.array(z.string()),
 });

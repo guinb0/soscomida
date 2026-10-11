@@ -4,7 +4,7 @@
 
 | Ambiente | Onde | Dados | Pagamentos |
 |---|---|---|---|
-| desenvolvimento | máquina local, `infra/docker/compose.dev.yml` | seed fictício | `DevPaymentProvider` (não pagável) |
+| desenvolvimento | máquina local, `infra/docker/compose.dev.yml` | dados criados à mão pelo site | `DevPaymentProvider` (não pagável) |
 | homologação | VPS separada (ou mesma VPS, outro compose project) | fictícios | Asaas **sandbox** |
 | produção | VPS própria | reais | Asaas produção — só após validação e autorização |
 
@@ -19,7 +19,7 @@ traefik (TLS Let's Encrypt)
  └─ worker   (mesma imagem da api, comando diferente)
 postgres 17  (volume local + backup externo)
 redis 7      (AOF ligado — filas não podem sumir num restart)
-S3           (externo: Cloudflare R2 ou Backblaze B2; MinIO só em dev)
+S3           (externo: Cloudflare R2 ou Backblaze B2; SeaweedFS só em dev)
 ```
 
 ## Deploy
@@ -47,6 +47,15 @@ uso depende da coluna.
 - **Teste de restauração mensal** em máquina descartável
   (`infra/scripts/restore-db.sh`) — backup que nunca foi restaurado não conta.
 - Buckets S3 com versionamento ligado no bucket privado.
+
+## CORS dos buckets
+
+O navegador envia imagens e documentos **direto para o S3** por URL assinada
+(PUT). Sem CORS no bucket o upload falha no navegador, embora funcione nos
+testes de integração (que não fazem preflight). Em produção, configure nos dois
+buckets: origem = domínio do site (nunca `*`), métodos `PUT` e `GET`, cabeçalhos
+`content-type` e `x-amz-*`. Em desenvolvimento o SeaweedFS já responde ao
+preflight de `http://localhost:3000` (verificado em 2026-10-11).
 
 ## Observabilidade
 
