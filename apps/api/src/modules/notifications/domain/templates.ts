@@ -84,3 +84,27 @@ export function campaignStatusEmail(input: {
   if (input.reason) paragrafos.push(`Justificativa registrada:\n${input.reason}`);
   return compose(`${m.assunto}: ${input.campaignTitle}`, `Olá, ${input.name}!`, paragrafos, { label: 'Abrir no painel', url: input.panelUrl });
 }
+
+const EXPENSE_MESSAGES = {
+  approve: { assunto: 'Despesa aprovada', texto: 'A revisão aprovou a despesa. Ela já aparece como aprovada na prestação de contas pública.' },
+  request_changes: { assunto: 'Ajustes pedidos na despesa', texto: 'A revisão pediu ajustes. A despesa voltou para rascunho: corrija e envie de novo.' },
+  reject: { assunto: 'Despesa recusada', texto: 'A revisão recusou a despesa. Ela aparece como recusada na prestação de contas pública.' },
+} as const;
+
+export type NotifiedExpenseAction = keyof typeof EXPENSE_MESSAGES;
+export const isNotifiedExpenseAction = (a: string): a is NotifiedExpenseAction => a in EXPENSE_MESSAGES;
+
+export function expenseDecisionEmail(input: {
+  name: string;
+  action: NotifiedExpenseAction;
+  expenseDescription: string;
+  campaignTitle: string;
+  reason: string | null;
+  url: string;
+}): RenderedEmail {
+  const m = EXPENSE_MESSAGES[input.action];
+  const paragrafos = [`Despesa: "${input.expenseDescription}" — campanha "${input.campaignTitle}".`, m.texto];
+  if (input.reason) paragrafos.push(`Justificativa registrada:
+${input.reason}`);
+  return compose(`${m.assunto}: ${input.expenseDescription}`, `Olá, ${input.name}!`, paragrafos, { label: 'Abrir a despesa', url: input.url });
+}

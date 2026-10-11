@@ -62,6 +62,23 @@ export interface DonationTarget {
   acceptsDonations: boolean;
 }
 
+/** O que a prestação de contas precisa saber da campanha. */
+export interface AccountabilityTarget {
+  id: string;
+  slug: string;
+  title: string;
+  organizerId: string;
+  status: CampaignStatus;
+  createdAt: Date;
+  publishedAt: Date | null;
+  endsAt: Date;
+  /** Orçamento planejado somado por categoria. */
+  plannedByCategory: Map<string, number>;
+}
+
+/** Status em que a campanha recebe prestação de contas (já recebeu ou pode receber doações). */
+export const ACCOUNTABLE_STATUSES: readonly CampaignStatus[] = ['ACTIVE', 'PAUSED', 'ENDED', 'UNDER_INVESTIGATION'];
+
 const TRANSITION_ERRORS = {
   INVALID_TRANSITION: () => new DomainError('INVALID_TRANSITION', 'Esta ação não é permitida no status atual da campanha', HttpStatus.CONFLICT),
   ACTOR_NOT_ALLOWED: () => forbidden('Você não pode executar esta ação nesta campanha'),
@@ -295,6 +312,30 @@ export class CampaignsService {
   }
 
   // --- Fachada para outros módulos -------------------------------------------
+
+  async getAccountabilityTarget(campaignId: string, executor: Executor = this.db): Promise<AccountabilityTarget | null> {
+    const [c] = await executor.select().from(campaigns).where(and(eq(campaigns.id, campaignId), isNull(campaigns.deletedAt))).limit(1);
+    if (!c) return null;
+    const itens = await executor.select().from(campaignBudgetItems).where(eq(campaignBudgetItems.campaignId, c.id));
+    const planejado = new Map<string, number>();
+    for (const i of itens) planejado.set(i.category, (planejado.get(i.category) ?? 0) + i.plannedCents);
+    return {
+      id: c.id,
+      slug: c.slug,
+      title: c.title,
+      organizerId: c.organizerId,
+      status: c.status as CampaignStatus,
+      createdAt: c.createdAt,
+      publishedAt: c.publishedAt,
+      endsAt: c.endsAt,
+      plannedByCategory: planejado,
+    };
+  }
+
+  /** Id da campanha pública pelo slug (404 se não for pública). */
+  async publicIdBySlug(slug: string): Promise<string> {
+    return (await this.loadPublicBySlug(slug)).id;
+  }
 
   async getDonationTarget(campaignId: string, executor: Executor = this.db): Promise<DonationTarget | null> {
     const [c] = await executor.select().from(campaigns).where(and(eq(campaigns.id, campaignId), isNull(campaigns.deletedAt))).limit(1);

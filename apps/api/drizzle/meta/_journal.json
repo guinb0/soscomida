@@ -22,6 +22,13 @@
       "when": 1791759205940,
       "tag": "0002_notificacoes_email",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791761485065,
+      "tag": "0003_prestacao_de_contas",
+      "breakpoints": true
     }
   ]
 }

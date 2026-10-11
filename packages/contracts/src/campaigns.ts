@@ -68,6 +68,20 @@ export const BUDGET_CATEGORIES = [
 export const budgetCategorySchema = z.enum(BUDGET_CATEGORIES);
 export type BudgetCategory = z.infer<typeof budgetCategorySchema>;
 
+export const BUDGET_LABELS: Record<BudgetCategory, string> = {
+  ALIMENTOS: 'Alimentos',
+  MEDICAMENTOS: 'Medicamentos',
+  SERVICOS_SAUDE: 'Serviços de saúde',
+  VETERINARIO: 'Veterinário',
+  TRANSPORTE: 'Transporte',
+  EMBALAGENS: 'Embalagens',
+  MATERIAIS: 'Materiais',
+  SERVICOS: 'Serviços',
+  MORADIA: 'Moradia',
+  EDUCACAO: 'Educação',
+  OUTROS: 'Outros',
+};
+
 export const budgetItemInputSchema = z.object({
   category: budgetCategorySchema,
   description: z.string().trim().min(3).max(200),

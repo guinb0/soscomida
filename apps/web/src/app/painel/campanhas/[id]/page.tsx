@@ -9,7 +9,7 @@ import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { CampaignForm, toFormDefaults } from '@/components/campaign-form';
 import { RequireSession } from '@/components/require-session';
-import { Alert, Badge, Button, Card, Container, Input, Label, PageTitle, ProgressBar, Skeleton, Textarea } from '@/components/ui';
+import { Alert, Badge, Button, Card, Container, Input, Label, PageTitle, ProgressBar, Skeleton, Textarea, buttonClass } from '@/components/ui';
 import { ApiClientError, api, errorMessage } from '@/lib/api';
 
 const ACOES: Record<string, { label: string; motivo: boolean; variante: 'primary' | 'secondary' | 'danger'; ajuda?: string }> = {
@@ -111,6 +111,16 @@ function Gerenciar({ id }: { id: string }) {
             <ProgressBar value={c.confirmedCents} max={c.goalCents} label="Progresso" />
             <p className="text-sm text-ink-600">{c.donationsCount} doações confirmadas</p>
           </Card>
+
+          {publica && (
+            <Card className="space-y-2 p-5">
+              <h2 className="font-display text-lg font-bold text-ink-900">Prestação de contas</h2>
+              <p className="text-sm text-ink-600">Registre os gastos com nota fiscal e comprovante. Eles aparecem na página pública depois de enviados.</p>
+              <Link href={`/painel/campanhas/${c.id}/despesas`} className={buttonClass('primary', 'md', 'w-full')}>
+                Despesas da campanha
+              </Link>
+            </Card>
+          )}
 
           {c.allowedActions.length > 0 && (
             <Card className="space-y-3 p-5">

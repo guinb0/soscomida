@@ -19,5 +19,6 @@ export const TEST_ENV: Record<string, string> = {
   S3_PUBLIC_BUCKET: 'soscomida-test-public',
   S3_PUBLIC_BASE_URL: 'http://127.0.0.1:9010/soscomida-test-public',
   PAYMENTS_PROVIDER: 'dev',
+  FISCAL_VERIFICATION_PROVIDER: 'dev',
   AUTH_RATE_LIMIT_PER_MINUTE: '1000',
 };

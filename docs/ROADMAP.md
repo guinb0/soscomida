@@ -49,10 +49,22 @@ de moderador exige MFA e que import cruzando fronteira de módulo quebra o lint.
 
 ## Fase 2 — Prestação de contas
 
-Despesas com estados separados, upload de documentos, leitura de XML/QR/PDF/OCR,
-chave de acesso, duplicidade, `FiscalVerificationProvider` com os conectores
-viáveis, rateio com limite, revisão administrativa, painel público de
-despesas com selos independentes, mascaramento de dados.
+- [x] Despesas com estados próprios (rascunho → enviada → em revisão → aprovada/recusada) e histórico só-inserção
+- [x] Upload privado de documentos (XML, PDF, foto) com URL assinada; abertura pela equipe auditada
+- [x] Leitura de XML de NF-e/NFC-e e de QR Code de NFC-e na foto; chave digitada para PDF
+- [x] Chave de acesso validada (DV), documento único por chave, duplicidade de arquivo por SHA-256
+- [x] Rateio de nota entre despesas com justificativa e limite garantido no banco
+- [x] `FiscalVerificationProvider` com provedor honesto "sem integração" e simulado para dev
+- [x] Alertas automáticos (fora do período, acima do orçamento, emitente ≠ fornecedor, homologação, sem protocolo, total declarado, duplicidade, rateio, sem comprovante)
+- [x] Revisão pela moderação (assumir, aprovar/pedir ajustes/recusar, avaliar comprovante e entrega), sem revisar a própria campanha
+- [x] Painel público de despesas com selos independentes; transparência por categoria (planejado × aprovado × em revisão)
+- [x] Mascaramento: arquivos privados, sem chave de acesso e sem CPF na página pública
+- [x] E-mail ao organizador nas decisões; e2e no navegador (desktop e celular)
+- [ ] Consulta oficial de autenticidade (SEFAZ): **depende de certificado ICP-Brasil e de decisão de negócio**
+- [ ] Verificação da assinatura XMLDSig do XML
+- [ ] OCR/IA para foto sem QR e PDF (Fase 3)
+- [ ] Hash perceptual de imagem; ONGs/organizações e beneficiários
+- [ ] Versão pública mascarada de imagens de comprovantes (hoje só os dados extraídos são públicos)
 
 ## Fase 3 — IA e antifraude
 

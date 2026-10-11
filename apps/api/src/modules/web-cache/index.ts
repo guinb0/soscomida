@@ -1,6 +1,8 @@
 import { Inject, Injectable, Logger, Module, type OnModuleInit } from '@nestjs/common';
 import { APP_CONFIG, type AppConfig } from '../../infra/config/config';
 import { CAMPAIGN_EVENTS, CampaignsModule, CampaignsService, DONATION_LEDGER_EVENTS } from '../campaigns';
+import { EXPENSE_EVENTS, ExpensesModule, ExpensesService } from '../expenses';
+import { FISCAL_EVENTS } from '../fiscal';
 import { EventHandlerRegistry } from '../outbox';
 
 /**
@@ -37,7 +39,7 @@ export class WebCacheService {
 }
 
 @Module({
-  imports: [CampaignsModule],
+  imports: [CampaignsModule, ExpensesModule],
   providers: [WebCacheService],
   exports: [WebCacheService],
 })
@@ -45,6 +47,7 @@ export class WebCacheModule implements OnModuleInit {
   constructor(
     private readonly cache: WebCacheService,
     private readonly campaigns: CampaignsService,
+    private readonly expenses: ExpensesService,
     private readonly events: EventHandlerRegistry,
   ) {}
 
@@ -58,5 +61,10 @@ export class WebCacheModule implements OnModuleInit {
     this.events.on(CAMPAIGN_EVENTS.statusChanged, (e) => invalidar(e.payload.campaignId));
     this.events.on(CAMPAIGN_EVENTS.updatePosted, (e) => invalidar(e.payload.campaignId));
     for (const tipo of DONATION_LEDGER_EVENTS) this.events.on(tipo, (e) => invalidar(e.payload.campaignId));
+    this.events.on(EXPENSE_EVENTS.statusChanged, (e) => invalidar(e.payload.campaignId));
+    // Nota verificada muda o selo fiscal das despesas que a usam.
+    this.events.on(FISCAL_EVENTS.verified, async (e) => {
+      for (const id of await this.expenses.campaignsUsingFiscalDocument(String(e.payload.documentId))) await invalidar(id);
+    });
   }
 }

@@ -26,10 +26,14 @@ const NUMEROS = [
 ];
 
 const SELOS = [
-  { nome: 'Documento fiscal autenticado', texto: 'O fisco confirmou que a nota existe, foi autorizada e não foi cancelada. Só aparece quando a consulta oficial foi possível.' },
-  { nome: 'Pagamento conciliado', texto: 'Há comprovante de pagamento compatível com a nota (valor, data e favorecido).' },
-  { nome: 'Despesa aprovada', texto: 'A despesa passou pelas verificações automáticas e, quando necessário, por revisão humana.' },
-  { nome: 'Entrega comprovada', texto: 'Há evidência de que o bem ou serviço chegou a quem precisava.' },
+  {
+    nome: 'Nota autenticada no fisco',
+    texto:
+      'O fisco confirmou que a nota existe, foi autorizada e não foi cancelada. Só aparece quando a consulta oficial foi possível. Hoje a plataforma ainda não tem a integração oficial (exige certificado digital), então as notas aparecem como "não verificável automaticamente" e passam por revisão humana.',
+  },
+  { nome: 'Pagamento conferido', texto: 'A revisão conferiu que o comprovante de pagamento é compatível com a nota (valor, data e favorecido).' },
+  { nome: 'Despesa aprovada', texto: 'Uma pessoa da revisão analisou os documentos e os alertas automáticos e aprovou, com justificativa registrada.' },
+  { nome: 'Entrega comprovada', texto: 'A revisão aceitou a evidência de que o bem ou serviço chegou a quem precisava.' },
 ];
 
 export default function TransparenciaPage() {
@@ -48,7 +52,8 @@ export default function TransparenciaPage() {
 
       <h2 className="mt-12 mb-4 font-display text-2xl font-extrabold text-ink-900">Selos da prestação de contas</h2>
       <p className="mb-4 text-ink-600">
-        Chegam com a prestação de contas. Cada selo é independente: uma nota autêntica não prova sozinha que o dinheiro da campanha foi bem usado.
+        Cada despesa mostra três selos independentes e o resultado da revisão humana. Uma nota autêntica não prova sozinha que o dinheiro da
+        campanha foi bem usado.
       </p>
       <section className="space-y-4">
         {SELOS.map((s) => (
@@ -61,8 +66,9 @@ export default function TransparenciaPage() {
 
       <h2 className="mt-12 mb-4 font-display text-2xl font-extrabold text-ink-900">O que nunca publicamos</h2>
       <p className="text-ink-700">
-        CPF, endereço, dados bancários, dados médicos e documentos com informações pessoais. Quando um documento precisa aparecer na prestação de
-        contas, publicamos uma versão com esses dados mascarados.
+        CPF, endereço, dados bancários, dados médicos e documentos com informações pessoais. Os arquivos originais de notas e comprovantes ficam
+        privados (só a organização e a equipe de revisão abrem, e cada abertura fica registrada). Na página pública aparecem os dados lidos da nota
+        — emitente, número, itens e valores — sem a chave de acesso e sem o CPF de quem comprou. CPF de fornecedor pessoa física aparece mascarado.
       </p>
     </Container>
   );

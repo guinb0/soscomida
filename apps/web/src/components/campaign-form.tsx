@@ -3,6 +3,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   BUDGET_CATEGORIES,
+  BUDGET_LABELS,
   CAMPAIGN_CATEGORIES,
   CATEGORY_LABELS,
   type CreateCampaignInput,
@@ -14,20 +15,6 @@ import { useState } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import { Alert, Button, FieldError, Input, Label, Select, Textarea } from './ui';
-
-const BUDGET_LABELS: Record<(typeof BUDGET_CATEGORIES)[number], string> = {
-  ALIMENTOS: 'Alimentos',
-  MEDICAMENTOS: 'Medicamentos',
-  SERVICOS_SAUDE: 'Serviços de saúde',
-  VETERINARIO: 'Veterinário',
-  TRANSPORTE: 'Transporte',
-  EMBALAGENS: 'Embalagens',
-  MATERIAIS: 'Materiais',
-  SERVICOS: 'Serviços',
-  MORADIA: 'Moradia',
-  EDUCACAO: 'Educação',
-  OUTROS: 'Outros',
-};
 
 const dinheiro = z.string().refine((v) => {
   try {

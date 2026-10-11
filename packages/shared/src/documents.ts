@@ -40,3 +40,19 @@ export function maskCpf(value: string): string {
   if (cpf.length !== 11) return '***';
   return `***.${cpf.slice(3, 6)}.${cpf.slice(6, 9)}-**`;
 }
+
+/** "11222333000181" → "11.222.333/0001-81". CNPJ é dado de empresa e pode ser público. */
+export function formatCnpj(value: string): string {
+  const c = onlyDigits(value);
+  if (c.length !== 14) return value;
+  return `${c.slice(0, 2)}.${c.slice(2, 5)}.${c.slice(5, 8)}/${c.slice(8, 12)}-${c.slice(12)}`;
+}
+
+/** Documento de fornecedor para exibição pública: CNPJ formatado, CPF sempre mascarado. */
+export function publicSupplierDocument(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const d = onlyDigits(value);
+  if (d.length === 14) return formatCnpj(d);
+  if (d.length === 11) return maskCpf(d);
+  return null;
+}

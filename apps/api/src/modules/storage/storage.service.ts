@@ -18,14 +18,31 @@ import { newId } from '../../infra/ids';
 import { type DetectedType, EXTENSION, detectFileType } from './domain/file-type';
 import { storedFiles } from './infra/storage.schema';
 
-export type FilePurpose = 'campaign_image';
+export type FilePurpose = 'campaign_image' | 'expense_document';
 
 const UPLOAD_URL_TTL_SECONDS = 300;
 
 /** Regras por finalidade: o que pode ser enviado e até que tamanho. */
 const PURPOSES: Record<FilePurpose, { types: DetectedType[]; maxBytes: number; public: boolean }> = {
   campaign_image: { types: ['image/jpeg', 'image/png', 'image/webp'], maxBytes: 8 * 1024 * 1024, public: true },
+  // Notas, comprovantes e evidências: sempre privados (podem ter dados pessoais).
+  expense_document: {
+    types: ['application/xml', 'application/pdf', 'image/jpeg', 'image/png', 'image/webp'],
+    maxBytes: 15 * 1024 * 1024,
+    public: false,
+  },
 };
+
+const DOWNLOAD_URL_TTL_SECONDS = 300;
+
+export interface StoredFileInfo {
+  id: string;
+  ownerUserId: string;
+  purpose: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256: string;
+}
 
 export interface UploadTicket {
   fileId: string;
@@ -183,6 +200,60 @@ export class StorageService implements OnModuleInit {
       .from(storedFiles)
       .where(and(inArray(storedFiles.id, fileIds), eq(storedFiles.status, 'VALIDATED')));
     return new Map(linhas.filter((l) => l.url).map((l) => [l.id, l.url!]));
+  }
+
+  /** Metadados de arquivos validados. */
+  async filesInfo(fileIds: string[]): Promise<Map<string, StoredFileInfo>> {
+    if (fileIds.length === 0) return new Map();
+    const linhas = await this.db
+      .select()
+      .from(storedFiles)
+      .where(and(inArray(storedFiles.id, fileIds), eq(storedFiles.status, 'VALIDATED')));
+    return new Map(
+      linhas.map((l) => [
+        l.id,
+        { id: l.id, ownerUserId: l.ownerUserId, purpose: l.purpose, mimeType: l.detectedMimeType!, sizeBytes: l.declaredSizeBytes, sha256: l.sha256! },
+      ]),
+    );
+  }
+
+  /** Arquivos validados com o mesmo conteúdo (SHA-256), exceto os informados. */
+  async filesWithSameContent(sha256: string, exceptIds: string[]): Promise<string[]> {
+    const linhas = await this.db
+      .select({ id: storedFiles.id })
+      .from(storedFiles)
+      .where(and(eq(storedFiles.sha256, sha256), eq(storedFiles.status, 'VALIDATED')));
+    return linhas.map((l) => l.id).filter((id) => !exceptIds.includes(id));
+  }
+
+  /** Conteúdo de um arquivo validado (para leitura de XML/QR no worker ou na API). */
+  async readValidated(fileId: string): Promise<Buffer> {
+    const [arquivo] = await this.db.select().from(storedFiles).where(eq(storedFiles.id, fileId)).limit(1);
+    if (!arquivo || arquivo.status !== 'VALIDATED') throw notFound('Arquivo');
+    const conteudo = await this.download(arquivo.bucket, arquivo.objectKey);
+    if (!conteudo) throw notFound('Arquivo');
+    return conteudo;
+  }
+
+  /**
+   * Link temporário para ver um arquivo privado. Quem pode ver é decidido
+   * pelo módulo dono do arquivo antes de chamar aqui.
+   */
+  async signedDownloadUrl(fileId: string): Promise<{ url: string; expiresAt: string }> {
+    const [arquivo] = await this.db.select().from(storedFiles).where(eq(storedFiles.id, fileId)).limit(1);
+    if (!arquivo || arquivo.status !== 'VALIDATED') throw notFound('Arquivo');
+    const url = await getSignedUrl(
+      this.s3,
+      new GetObjectCommand({
+        Bucket: arquivo.bucket,
+        Key: arquivo.objectKey,
+        ResponseContentType: arquivo.detectedMimeType ?? undefined,
+        // Abre no navegador sem executar nada: XML e PDF não viram página do nosso domínio.
+        ResponseContentDisposition: `inline; filename="${arquivo.id}.${EXTENSION[arquivo.detectedMimeType as DetectedType] ?? 'bin'}"`,
+      }),
+      { expiresIn: DOWNLOAD_URL_TTL_SECONDS },
+    );
+    return { url, expiresAt: new Date(Date.now() + DOWNLOAD_URL_TTL_SECONDS * 1000).toISOString() };
   }
 
   async assertOwnedValidated(fileId: string, ownerUserId: string): Promise<void> {

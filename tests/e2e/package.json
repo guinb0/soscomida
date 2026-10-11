@@ -11,6 +11,7 @@
   "devDependencies": {
     "@playwright/test": "1.63.0",
     "@soscomida/config": "workspace:*",
+    "@soscomida/shared": "workspace:*",
     "@types/node": "^24.0.0",
     "eslint": "^10.0.0",
     "otpauth": "^9.5.2",

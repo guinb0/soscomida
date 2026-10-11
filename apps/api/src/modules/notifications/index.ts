@@ -3,7 +3,13 @@ import { APP_CONFIG, type AppConfig } from '../../infra/config/config';
 import { CAMPAIGN_EVENTS, CampaignsModule, CampaignsService } from '../campaigns';
 import { IdentityModule } from '../identity';
 import { EventHandlerRegistry } from '../outbox';
-import { campaignStatusEmail, donationConfirmedEmail, isNotifiedCampaignAction } from './domain/templates';
+import {
+  campaignStatusEmail,
+  donationConfirmedEmail,
+  expenseDecisionEmail,
+  isNotifiedCampaignAction,
+  isNotifiedExpenseAction,
+} from './domain/templates';
 import { EMAIL_SENDER, type EmailSender, LogEmailSender, SmtpEmailSender } from './infra/email-sender';
 import { NotificationsService } from './notifications.service';
 
@@ -51,6 +57,8 @@ export class NotificationsModule implements OnModuleInit, OnModuleDestroy {
       });
     });
 
+    this.registerExpenseHandlers(web);
+
     this.events.on(CAMPAIGN_EVENTS.statusChanged, async (evento) => {
       const p = evento.payload;
       const acao = String(p.action);
@@ -69,6 +77,31 @@ export class NotificationsModule implements OnModuleInit, OnModuleDestroy {
             campaignTitle: campanha.title,
             reason: typeof p.reason === 'string' ? p.reason : null,
             panelUrl: `${web}/painel/campanhas/${campanhaId}`,
+          }),
+      });
+    });
+  }
+
+  private registerExpenseHandlers(web: string): void {
+    this.events.on('ExpenseStatusChanged', async (evento) => {
+      const p = evento.payload;
+      const acao = String(p.action);
+      if (!isNotifiedExpenseAction(acao) || typeof p.createdBy !== 'string') return;
+      const campanhaId = String(p.campaignId);
+      const campanha = (await this.campaigns.summariesByIds([campanhaId])).get(campanhaId);
+      if (!campanha) return;
+      await this.notifications.notify({
+        dedupeKey: `expense_status:${evento.id}`,
+        userId: p.createdBy,
+        template: `expense_${acao}`,
+        render: ({ name }) =>
+          expenseDecisionEmail({
+            name,
+            action: acao,
+            expenseDescription: typeof p.description === 'string' ? p.description : 'despesa',
+            campaignTitle: campanha.title,
+            reason: typeof p.reason === 'string' ? p.reason : null,
+            url: `${web}/painel/despesas/${String(p.expenseId)}`,
           }),
       });
     });

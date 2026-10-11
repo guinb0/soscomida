@@ -16,6 +16,8 @@ export function detectFileType(bytes: Uint8Array): DetectedType | null {
   if (startsWith(bytes, ascii('%PDF-'))) return 'application/pdf';
   // XML: com ou sem BOM UTF-8.
   if (startsWith(bytes, ascii('<?xml')) || startsWith(bytes, [0xef, 0xbb, 0xbf, ...ascii('<?xml')])) return 'application/xml';
+  // XML fiscal sem declaração (alguns emissores gravam direto a raiz).
+  if (startsWith(bytes, ascii('<nfeProc')) || startsWith(bytes, ascii('<NFe '))) return 'application/xml';
   return null;
 }
 

@@ -125,9 +125,8 @@ está em `index.ts` (fachada). Fases indicam quando o módulo ganha código.
 | `transparency` | projeções públicas (painéis, indicadores) | 1→2 |
 | `outbox` | publicação confiável de eventos | 0 |
 | `organizations` | ONGs e membros | 2 |
-| `expenses` | despesas, alocações, estados de comprovação | 2 |
-| `fiscal-documents` | leitura de XML/QR/PDF/OCR, itens | 2 |
-| `fiscal-verification` | provedores de consulta fiscal | 2 |
+| `expenses` | despesas, documentos anexados, rateio, alertas, revisão | 2 (feito) |
+| `fiscal` | leitura de XML/QR, documento único por chave, itens, tentativas de verificação e provedores | 2 (feito; OCR na 3) |
 | `fraud-detection` | sinais, regras, score | 3 |
 | `ai-analysis` | análise semântica de aderência | 3 |
 | `disputes` | contestação e recursos | 3 |
@@ -146,6 +145,7 @@ está em `index.ts` (fachada). Fases indicam quando o módulo ganha código.
 
    ```
    notifications, web-cache, transparency, moderation
+     → expenses → fiscal
      → donations → payments → ledger
      → campaigns → storage
      → identity, audit, outbox → infra (db, config, observability)

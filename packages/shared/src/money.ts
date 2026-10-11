@@ -58,3 +58,13 @@ export function percentOf(part: number, whole: number): number {
   if (cents(whole) <= 0) return 0;
   return Math.floor((cents(part) * 100) / whole);
 }
+
+/**
+ * Decimal com ponto e até 2 casas, como nos XMLs fiscais ("1234.5" → 123450).
+ * Sem passar por float.
+ */
+export function decimalToCents(input: string): Cents {
+  const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(input.trim());
+  if (!match) throw new InvalidMoneyError(`Decimal inválido: "${input}"`);
+  return cents(Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0')));
+}

@@ -4,3 +4,4 @@ export * from './campaigns';
 export * from './moderation';
 export * from './donations';
 export * from './transparency';
+export * from './expenses';

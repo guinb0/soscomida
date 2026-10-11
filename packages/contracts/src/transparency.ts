@@ -25,9 +25,19 @@ export const campaignTransparencySchema = z.object({
       plannedCents: centsSchema,
     }),
   ),
-  /** Prestação de contas: disponível a partir da Fase 2. */
+  /**
+   * Prestação de contas. `approvedCents`: despesas aprovadas na revisão;
+   * `inReviewCents`: enviadas e ainda não decididas. Por categoria, comparado
+   * ao orçamento planejado.
+   */
   expenses: z.object({
-    available: z.literal(false),
+    available: z.literal(true),
+    approvedCents: centsSchema,
+    inReviewCents: centsSchema,
+    rejectedCount: z.number().int(),
+    /** Aprovadas com nota autenticada no fisco. */
+    fiscallyAuthenticatedCents: centsSchema,
+    byCategory: z.array(z.object({ category: budgetCategorySchema, plannedCents: centsSchema, approvedCents: centsSchema, inReviewCents: centsSchema })),
   }),
   recentSupporters: z.array(publicSupporterSchema),
   generatedAt: z.string(),

@@ -1,5 +1,5 @@
 {
   "extends": "@soscomida/config/tsconfig.node.json",
-  "compilerOptions": { "noEmit": true },
+  "compilerOptions": { "noEmit": true, "module": "ESNext", "moduleResolution": "Bundler" },
   "include": ["*.ts", "specs"]
 }

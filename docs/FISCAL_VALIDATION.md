@@ -1,7 +1,18 @@
 # Validação de documentos fiscais
 
-> Estado: **planejado para a Fase 2.** Partes puras (estrutura e dígito
-> verificador da chave de acesso) já existem em `@soscomida/shared` com testes.
+> Estado (2026-10-11): **implementado na Fase 2**, exceto a consulta oficial.
+>
+> | Parte | Situação |
+> |---|---|
+> | XML de NF-e/NFC-e (`modules/fiscal/domain/nfe-xml.ts`) | feito: chave, emitente, itens, total, protocolo declarado, coerência campos × chave, XXE bloqueado |
+> | QR Code de NFC-e na foto (`infra/qr-reader.ts` + `parseNfceQrCode` em `@soscomida/shared`) | feito: v1 (parâmetros nomeados), v2 online/offline; v3 só chave e ambiente (posição dos demais campos não confirmada) |
+> | PDF/foto sem QR | organizador digita a chave e o total (marcado como "total declarado") |
+> | OCR e IA multimodal | **não feito** (Fase 3) |
+> | Antiduplicidade | chave única + SHA-256 do arquivo; hash perceptual **não feito** |
+> | Rateio com limite | feito (lock + constraint trigger) |
+> | `FiscalVerificationProvider` | interface + `none` (padrão: UNVERIFIABLE/NO_INTEGRATION) + `dev` (simulado, proibido fora de dev/test). **Nenhuma consulta oficial real**: depende de certificado ICP-Brasil |
+> | Assinatura digital do XML (XMLDSig) | **não verificada**: o XML lido não prova autenticidade |
+> | Revisão humana e selos públicos | feito |
 
 ## O que a plataforma afirma — e o que não afirma
 

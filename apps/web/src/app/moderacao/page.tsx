@@ -26,6 +26,12 @@ function Fila() {
   return (
     <Container className="py-10">
       <PageTitle title="Moderação" subtitle="Campanhas aguardando análise, das mais antigas para as mais recentes." />
+      <nav className="mb-6 flex gap-2" aria-label="Filas">
+        <span className="rounded-full bg-sky-100 px-3 py-1 text-sm font-bold text-sky-800">Campanhas</span>
+        <Link href="/moderacao/despesas" className="rounded-full border border-line-strong px-3 py-1 text-sm font-bold text-ink-700 hover:bg-paper-2">
+          Despesas
+        </Link>
+      </nav>
       {isLoading && <Skeleton className="h-40" />}
       {error && !needsMfa(error) && <Alert tone="danger">{errorMessage(error)}</Alert>}
       {data && data.length === 0 && <p className="rounded-2xl border border-dashed border-line-strong p-8 text-center text-ink-600">Nenhuma campanha aguardando análise.</p>}

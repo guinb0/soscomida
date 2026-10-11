@@ -1,7 +1,8 @@
-import { CATEGORY_LABELS, type CampaignDetail, type CampaignTransparency, STATUS_LABELS } from '@soscomida/contracts';
+import { CATEGORY_LABELS, type CampaignDetail, type CampaignTransparency, type PublicExpense, STATUS_LABELS } from '@soscomida/contracts';
 import { formatBrl, percentOf } from '@soscomida/shared';
 import type { Metadata } from 'next';
 import { DonateForm } from '@/components/donate-form';
+import { PublicExpenses } from '@/components/public-expenses';
 import { TransparencyPanel } from '@/components/transparency-panel';
 import { Alert, Badge, Card, Container, ProgressBar } from '@/components/ui';
 import { cacheTags, publicApi } from '@/lib/server-api';
@@ -17,10 +18,11 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 
 export default async function CampanhaPage({ params }: { params: Params }) {
   const { slug } = await params;
-  const [campanha, transparencia, atualizacoes] = await Promise.all([
+  const [campanha, transparencia, atualizacoes, despesas] = await Promise.all([
     publicApi<CampaignDetail>(`/campaigns/${encodeURIComponent(slug)}`, { tags: [cacheTags.campaign(slug)] }),
     publicApi<CampaignTransparency>(`/campaigns/${encodeURIComponent(slug)}/transparency`, { tags: [cacheTags.campaign(slug)] }),
     publicApi<{ id: string; title: string; body: string; createdAt: string }[]>(`/campaigns/${encodeURIComponent(slug)}/updates`, { tags: [cacheTags.campaign(slug)] }),
+    publicApi<PublicExpense[]>(`/campaigns/${encodeURIComponent(slug)}/expenses`, { tags: [cacheTags.campaign(slug)] }),
   ]);
   const dias = daysLeft(campanha.endsAt);
 
@@ -65,6 +67,13 @@ export default async function CampanhaPage({ params }: { params: Params }) {
           </section>
 
           <TransparencyPanel data={transparencia} />
+
+          <section aria-labelledby="despesas">
+            <h2 id="despesas" className="mb-3 font-display text-2xl font-extrabold text-ink-900">
+              Despesas
+            </h2>
+            <PublicExpenses expenses={despesas} />
+          </section>
 
           {atualizacoes.length > 0 && (
             <section aria-labelledby="atualizacoes">

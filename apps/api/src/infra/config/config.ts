@@ -51,6 +51,12 @@ const envSchema = z
     PIX_EXPIRATION_MINUTES: z.coerce.number().int().min(5).max(24 * 60).default(60),
 
     /**
+     * Consulta de autenticidade de notas. none = sem integração (resultado
+     * "não verificável", revisão humana). dev = simulado, só desenvolvimento.
+     */
+    FISCAL_VERIFICATION_PROVIDER: z.enum(['none', 'dev']).default('none'),
+
+    /**
      * log = só registra no log (testes). smtp = envia por SMTP_URL; em
      * desenvolvimento, o Mailpit do compose (http://localhost:8025).
      */
@@ -76,6 +82,9 @@ const envSchema = z
         path: ['PAYMENTS_PROVIDER'],
         message: 'O provedor de desenvolvimento gera cobranças não pagáveis e é proibido fora de development/test.',
       });
+    }
+    if (env.NODE_ENV !== 'development' && env.NODE_ENV !== 'test' && env.FISCAL_VERIFICATION_PROVIDER === 'dev') {
+      ctx.addIssue({ code: 'custom', path: ['FISCAL_VERIFICATION_PROVIDER'], message: 'O provedor fiscal simulado é proibido fora de development/test.' });
     }
     if (env.WEB_REVALIDATE_URL && !env.WEB_REVALIDATE_SECRET) {
       ctx.addIssue({ code: 'custom', path: ['WEB_REVALIDATE_SECRET'], message: 'WEB_REVALIDATE_SECRET é obrigatório com WEB_REVALIDATE_URL' });

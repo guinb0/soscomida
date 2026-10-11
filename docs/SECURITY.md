@@ -74,12 +74,21 @@ operações financeiras administrativas e acessos a documentos privados.
 | Nome, e-mail do doador | execução de contrato | doador pode doar como anônimo publicamente |
 | CPF do doador | exigência do provedor Pix | repassado ao provedor; guardamos só o necessário e cifrado |
 | Dados de saúde em campanhas (ex.: tratamento) | consentimento do titular | nunca publicados automaticamente; versão pública mascarada |
-| Documentos fiscais | legítimo interesse / obrigação de prestar contas | versão pública mascara CPF de destinatário, endereço e dados bancários |
+| Documentos fiscais | legítimo interesse / obrigação de prestar contas | arquivos originais privados (URL assinada de 5 min, abertura pela equipe auditada); público vê só os dados lidos, sem CPF do comprador e **sem a chave de acesso**; CPF de fornecedor pessoa física mascarado |
 
 Direitos do titular (acesso, correção, exclusão) com exceção dos registros
 financeiros e fiscais, que precisam ser mantidos pelo prazo legal.
 **Pendente:** DPO/encarregado, política de privacidade e termos de uso
 revisados por advogado.
+
+**Decisão pendente (produto/jurídico):** publicar a chave de acesso permitiria a
+qualquer pessoa conferir a nota no portal da SEFAZ, mas a consulta pode exibir
+dados do comprador (o próprio organizador). Por padrão a chave **não** é
+publicada; a equipe de revisão a vê.
+
+XML fiscal: DTD e entidades são recusados antes do parse (XXE e expansão de
+entidades), tamanho máximo 5 MB, valores lidos como texto e convertidos para
+centavos sem float.
 
 ## Modelo de ameaças (resumo)
 

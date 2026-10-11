@@ -78,19 +78,28 @@ erDiagram
 | `ledger_transactions` | id, kind, idempotency_key, reference_type, reference_id, description, occurred_at | `UNIQUE(idempotency_key)`; trigger só inserção |
 | `ledger_entries` | id, transaction_id, account_id, direction (`DEBIT`,`CREDIT`), amount_cents | `CHECK amount_cents > 0`; trigger só inserção; **constraint trigger diferida** confere `Σ débitos = Σ créditos` por transação no commit |
 
-### Fase 2 — prestação de contas (planejado)
+### Fase 2 — prestação de contas (migração 0003)
 
-`organizations`, `organization_members`, `beneficiaries`, `expenses`,
-`expense_allocations`, `fiscal_documents` (`UNIQUE(access_key)` quando houver
-chave; `UNIQUE(sha256)` do arquivo), `fiscal_document_items`,
-`fiscal_verifications` (uma linha por tentativa: provedor, método, resultado,
-evidência, horário), `payment_evidences`, `expense_evidences`,
-`expense_status_history`.
+| Tabela | Colunas principais | Restrições |
+|---|---|---|
+| `fiscal_documents` | id, access_key, model, uf, series, number, issued_at, environment, issuer_document, issuer_name, total_cents (lido), declared_total_cents (informado), source (`XML`,`QR_CODE`,`ACCESS_KEY`), source_file_id, protocol_status (declarado no XML), warnings, verification_status (projeção), verified_at | `UNIQUE(access_key)`, `CHECK access_key ~ '^[0-9]{44}$'`; CPF do comprador do XML **não é gravado** |
+| `fiscal_document_items` | document_id, position, description, ncm, cfop, unit, quantity (texto), total_cents | `UNIQUE(document_id, position)` |
+| `fiscal_verifications` | document_id, provider, status, reason, details, evidence, created_at | uma linha por tentativa; **só inserção** |
+| `expenses` | id, campaign_id, created_by, status, version, budget_category, description, supplier_name, supplier_document, amount_cents, spent_on, payment_proof, delivery, flags, reviewer_id, submitted_at, decided_at, decision_reason | `CHECK amount_cents > 0`, listas de status/avaliação |
+| `expense_documents` | expense_id, file_id, kind, fiscal_document_id, allocated_cents, sharing_justification, extraction_status | `UNIQUE(file_id)`, `UNIQUE(expense_id, fiscal_document_id)` parcial, nota só em `kind = 'FISCAL'` |
+| `expense_status_history` | expense_id, from/to, action, actor_user_id, reason | **só inserção** |
+| `email_notifications` (0002) | dedupe_key, user_id, template, status, attempts | `UNIQUE(dedupe_key)` |
 
-Invariante central de rateio: para cada `fiscal_document`,
-`Σ expense_allocations.amount_cents ≤ valor elegível do documento`. Garantida
-no domínio com `SELECT ... FOR UPDATE` no documento antes de inserir a
-alocação, e por uma constraint trigger no banco como segunda barreira.
+Invariante central de rateio: para cada nota,
+`Σ allocated_cents (despesas não recusadas/canceladas) ≤ total da nota` (lido
+ou, na falta, declarado). Garantida no domínio com `SELECT ... FOR UPDATE` na
+nota antes de alocar, e pela constraint trigger diferida
+`expense_documents_allocation_limit` como segunda barreira (testada com
+concorrência real e com UPDATE direto no banco).
+
+Ficou para depois: `organizations`/`beneficiaries` (campanhas de ONG) e hash
+perceptual de imagem (hoje a duplicidade é por SHA-256 do arquivo e pela chave
+de acesso).
 
 ### Fase 3 — risco e IA (planejado)
 
@@ -111,6 +120,9 @@ validada), `fraud_signals` (regra, severidade, evidência), `risk_reviews`,
 | Uma análise aberta por campanha | índice único parcial | caso de uso reaproveita o caso aberto |
 | Soma do orçamento = meta | — | validação ao enviar para análise |
 | Auditoria imutável | trigger | serviço só insere |
+| Rateio de nota ≤ total | constraint trigger diferida | `FOR UPDATE` na nota + checagem em `ExpensesService.allocate` |
+| Uma nota por chave de acesso | `UNIQUE(access_key)` + `ON CONFLICT` | registro reaproveita/completa o documento |
+| Histórico de despesas e verificações fiscais imutável | trigger | serviço só insere |
 
 ## Retenção e arquivamento
 

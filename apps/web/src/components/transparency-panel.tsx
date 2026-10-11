@@ -1,23 +1,9 @@
-import { type BudgetCategory, type CampaignTransparency } from '@soscomida/contracts';
+import { BUDGET_LABELS, type CampaignTransparency } from '@soscomida/contracts';
 import { formatBrl } from '@soscomida/shared';
 import { Info } from 'lucide-react';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
 import { Card } from './ui';
-
-const BUDGET_LABELS: Record<BudgetCategory, string> = {
-  ALIMENTOS: 'Alimentos',
-  MEDICAMENTOS: 'Medicamentos',
-  SERVICOS_SAUDE: 'Serviços de saúde',
-  VETERINARIO: 'Veterinário',
-  TRANSPORTE: 'Transporte',
-  EMBALAGENS: 'Embalagens',
-  MATERIAIS: 'Materiais',
-  SERVICOS: 'Serviços',
-  MORADIA: 'Moradia',
-  EDUCACAO: 'Educação',
-  OUTROS: 'Outros',
-};
 
 function Numero({ rotulo, valor, explicacao }: { rotulo: string; valor: string; explicacao: string }) {
   return (
@@ -52,7 +38,7 @@ export function TransparencyPanel({ data }: { data: CampaignTransparency }) {
       </dl>
 
       <h3 className="mt-8 mb-3 font-display text-lg font-bold text-ink-900">Orçamento planejado</h3>
-      <p className="mb-3 text-sm text-ink-600">É contra este plano que as despesas serão comparadas na prestação de contas.</p>
+      <p className="mb-3 text-sm text-ink-600">É contra este plano que as despesas são comparadas na prestação de contas.</p>
       <ul className="divide-y divide-line rounded-xl border border-line">
         {data.budget.map((item, i) => (
           <li key={i} className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
@@ -69,12 +55,40 @@ export function TransparencyPanel({ data }: { data: CampaignTransparency }) {
         </li>
       </ul>
 
-      <div className="mt-8 rounded-xl border border-dashed border-line-strong p-4 text-sm text-ink-600">
-        <p className="font-bold text-ink-800">Prestação de contas</p>
-        <p className="mt-1">
-          O envio de despesas com notas fiscais e a verificação dos documentos chegam na próxima etapa da plataforma. Até lá, esta campanha mostra
-          apenas o que foi arrecadado e o orçamento planejado — nenhum gasto aparece como comprovado.
-        </p>
+      <h3 className="mt-8 mb-3 font-display text-lg font-bold text-ink-900">Prestação de contas</h3>
+      <dl className="grid gap-3 sm:grid-cols-3">
+        <Numero rotulo="Despesas aprovadas" valor={formatBrl(data.expenses.approvedCents)} explicacao="Conferidas pela revisão da plataforma" />
+        <Numero rotulo="Em revisão" valor={formatBrl(data.expenses.inReviewCents)} explicacao="Enviadas e ainda não decididas" />
+        <Numero
+          rotulo="Com nota autenticada"
+          valor={formatBrl(data.expenses.fiscallyAuthenticatedCents)}
+          explicacao="Aprovadas cuja nota o fisco confirmou. Sem integração oficial, fica em zero."
+        />
+      </dl>
+      {data.expenses.rejectedCount > 0 && (
+        <p className="mt-2 text-sm text-maca-700">{data.expenses.rejectedCount} despesa(s) recusada(s) pela revisão — veja os motivos abaixo.</p>
+      )}
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full min-w-[420px] text-sm">
+          <thead>
+            <tr className="text-left text-ink-500">
+              <th className="py-2 font-bold">Categoria</th>
+              <th className="py-2 text-right font-bold">Planejado</th>
+              <th className="py-2 text-right font-bold">Aprovado</th>
+              <th className="py-2 text-right font-bold">Em revisão</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {data.expenses.byCategory.map((c) => (
+              <tr key={c.category}>
+                <td className="py-2 font-bold text-ink-800">{BUDGET_LABELS[c.category]}</td>
+                <td className="py-2 text-right">{formatBrl(c.plannedCents)}</td>
+                <td className={c.approvedCents > c.plannedCents ? 'py-2 text-right font-bold text-maca-700' : 'py-2 text-right'}>{formatBrl(c.approvedCents)}</td>
+                <td className="py-2 text-right text-ink-600">{formatBrl(c.inReviewCents)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {data.recentSupporters.length > 0 && (

@@ -27,8 +27,9 @@ export const storedFiles = pgTable(
   (t) => [
     uniqueIndex('stored_files_object_key').on(t.bucket, t.objectKey),
     index('stored_files_owner_idx').on(t.ownerUserId),
+    index('stored_files_sha256_idx').on(t.sha256),
     check('stored_files_status_check', sql`${t.status} in ('PENDING_UPLOAD', 'VALIDATED', 'REJECTED')`),
-    check('stored_files_purpose_check', sql`${t.purpose} in ('campaign_image')`),
+    check('stored_files_purpose_check', sql`${t.purpose} in ('campaign_image', 'expense_document')`),
     check('stored_files_size_check', sql`${t.declaredSizeBytes} > 0`),
   ],
 );

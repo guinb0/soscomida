@@ -1,6 +1,8 @@
 import { AuditModule } from './audit';
 import { CampaignsModule } from './campaigns';
 import { DonationsModule } from './donations';
+import { ExpensesModule } from './expenses';
+import { FiscalModule } from './fiscal';
 import { IdentityModule } from './identity';
 import { LedgerModule } from './ledger';
 import { ModerationModule } from './moderation';
@@ -25,6 +27,8 @@ export const DOMAIN_MODULES = [
   ModerationModule,
   PaymentsModule,
   DonationsModule,
+  FiscalModule,
+  ExpensesModule,
   TransparencyModule,
   NotificationsModule,
   WebCacheModule,

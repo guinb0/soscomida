@@ -8,7 +8,14 @@ import { StorageModule } from '../storage';
 import { CampaignsService } from './application/campaigns.service';
 import { OrganizerCampaignsController, PublicCampaignsController } from './http/campaigns.controller';
 
-export { CampaignsService, CAMPAIGN_EVENTS, type DonationTarget, type StatusChangeCommand } from './application/campaigns.service';
+export {
+  ACCOUNTABLE_STATUSES,
+  type AccountabilityTarget,
+  CampaignsService,
+  CAMPAIGN_EVENTS,
+  type DonationTarget,
+  type StatusChangeCommand,
+} from './application/campaigns.service';
 export { type CampaignAction, allowedActions, PUBLIC_STATUSES } from './domain/campaign-status';
 
 /** Eventos de doação que mudam os números públicos da campanha. */
