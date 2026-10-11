@@ -7,7 +7,7 @@
 | Unitário e propriedades | `packages/*/src/**/*.test.ts`, `apps/api/src/**/*.test.ts` | Vitest + fast-check | nada |
 | Regras de lint próprias | `apps/api/eslint/*.test.ts` | RuleTester do ESLint | nada |
 | Integração (API real) | `apps/api/test/**/*.int.test.ts` | Vitest + supertest | Postgres e Redis |
-| Ponta a ponta | `tests/e2e` (**ainda não existe**, previsto na Fase 2) | Playwright | stack completa |
+| Ponta a ponta | `tests/e2e/specs` | Playwright (Chromium desktop e celular) | stack completa + Mailpit |
 
 Os testes de integração sobem o `AppModule` inteiro (guards, filtros,
 validação) e falam HTTP com ele. Nada de banco em memória: dinheiro e
@@ -20,7 +20,16 @@ pnpm dev:infra          # Postgres e Redis locais
 pnpm test               # tudo
 pnpm --filter @soscomida/api test:unit
 pnpm --filter @soscomida/api test:integration
+
+# ponta a ponta: precisa de build, migração e .env (README). Sobe API e site
+# se não estiverem no ar, e um worker próprio.
+pnpm --filter @soscomida/e2e exec playwright install chromium   # uma vez
+pnpm test:e2e
 ```
+
+O e2e percorre o fluxo real no navegador: cadastro, criação de campanha,
+moderação com MFA (TOTP de verdade), publicação, doação Pix simulada, valor na
+página pública sem dados pessoais e o e-mail de aprovação no Mailpit.
 
 O `globalSetup` **apaga e recria** o schema do banco `soscomida_test` e limpa
 o Redis db 1 a cada execução. Tabelas só-inserção (auditoria, ledger) recusam

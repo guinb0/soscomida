@@ -1,0 +1,19 @@
+{
+  "name": "@soscomida/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@soscomida/config": "workspace:*",
+    "@types/node": "^24.0.0",
+    "eslint": "^10.0.0",
+    "otpauth": "^9.5.2",
+    "typescript": "^5.9.3"
+  }
+}

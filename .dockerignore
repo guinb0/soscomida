@@ -1,0 +1,14 @@
+# Nunca enviar segredos nem artefatos locais para o contexto do build.
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/coverage
+**/.env
+**/.env.*
+!**/.env.example
+**/*.log
+**/*.tsbuildinfo
+tests/e2e/playwright-report
+tests/e2e/test-results
+.git

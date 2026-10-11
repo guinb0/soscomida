@@ -177,6 +177,16 @@ export class IdentityService {
     return new Map(linhas.map((l) => [l.id, l.name]));
   }
 
+  /** Para quem mandar avisos por e-mail. Contas desativadas ficam de fora. */
+  async contacts(ids: string[]): Promise<Map<string, { name: string; email: string }>> {
+    if (ids.length === 0) return new Map();
+    const linhas = await this.db
+      .select({ id: users.id, name: users.name, email: users.email })
+      .from(users)
+      .where(and(inArray(users.id, ids), isNull(users.disabledAt)));
+    return new Map(linhas.map((l) => [l.id, { name: l.name, email: l.email }]));
+  }
+
   async revokeRole(userId: string, role: Role, revokedBy: string): Promise<void> {
     if (userId === revokedBy && role === 'admin') {
       throw conflict('CANNOT_REVOKE_OWN_ADMIN', 'Você não pode remover o próprio papel de administrador');

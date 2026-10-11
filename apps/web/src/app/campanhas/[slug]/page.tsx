@@ -4,25 +4,23 @@ import type { Metadata } from 'next';
 import { DonateForm } from '@/components/donate-form';
 import { TransparencyPanel } from '@/components/transparency-panel';
 import { Alert, Badge, Card, Container, ProgressBar } from '@/components/ui';
-import { publicApi } from '@/lib/server-api';
+import { cacheTags, publicApi } from '@/lib/server-api';
 import { daysLeft, formatDate } from '@/lib/utils';
-
-export const revalidate = 30;
 
 type Params = Promise<{ slug: string }>;
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { slug } = await params;
-  const campanha = await publicApi<CampaignDetail>(`/campaigns/${encodeURIComponent(slug)}`);
+  const campanha = await publicApi<CampaignDetail>(`/campaigns/${encodeURIComponent(slug)}`, { tags: [cacheTags.campaign(slug)] });
   return { title: campanha.title, description: campanha.summary, openGraph: { images: campanha.coverUrl ? [campanha.coverUrl] : [] } };
 }
 
 export default async function CampanhaPage({ params }: { params: Params }) {
   const { slug } = await params;
   const [campanha, transparencia, atualizacoes] = await Promise.all([
-    publicApi<CampaignDetail>(`/campaigns/${encodeURIComponent(slug)}`, 30),
-    publicApi<CampaignTransparency>(`/campaigns/${encodeURIComponent(slug)}/transparency`, 30),
-    publicApi<{ id: string; title: string; body: string; createdAt: string }[]>(`/campaigns/${encodeURIComponent(slug)}/updates`, 60),
+    publicApi<CampaignDetail>(`/campaigns/${encodeURIComponent(slug)}`, { tags: [cacheTags.campaign(slug)] }),
+    publicApi<CampaignTransparency>(`/campaigns/${encodeURIComponent(slug)}/transparency`, { tags: [cacheTags.campaign(slug)] }),
+    publicApi<{ id: string; title: string; body: string; createdAt: string }[]>(`/campaigns/${encodeURIComponent(slug)}/updates`, { tags: [cacheTags.campaign(slug)] }),
   ]);
   const dias = daysLeft(campanha.endsAt);
 

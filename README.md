@@ -27,7 +27,7 @@ Requisitos: Node 24 (ver `.nvmrc`), pnpm 10, Docker.
 
 ```bash
 pnpm install
-pnpm dev:infra                               # Postgres :5440, Redis :6390, S3 :9010
+pnpm dev:infra                               # Postgres :5440, Redis :6390, S3 :9010, Mailpit :8025
 cp apps/api/.env.example apps/api/.env       # e preencha MFA_ENCRYPTION_KEY (comando no arquivo)
 cp apps/web/.env.example apps/web/.env
 pnpm build
@@ -36,6 +36,7 @@ pnpm dev                                     # web :3000, API :4000, worker
 ```
 
 - Site: http://localhost:3000
+- E-mails enviados em desenvolvimento: http://localhost:8025 (Mailpit)
 - API e OpenAPI: http://localhost:4000/api/docs
 - Primeiro administrador: crie a conta pelo site e rode
   `pnpm --filter @soscomida/api grant-role voce@exemplo.com admin`.
@@ -53,6 +54,7 @@ doação (só em `development`). Integração real: [docs/PAYMENTS.md](docs/PAYM
 | `pnpm lint` | ESLint, incluindo a regra de fronteira entre módulos |
 | `pnpm typecheck` | TypeScript strict |
 | `pnpm test` | testes unitários e de integração (precisa de `pnpm dev:infra`) |
+| `pnpm test:e2e` | ponta a ponta no navegador (Playwright; ver docs/TESTING.md) |
 | `pnpm --filter @soscomida/api db:generate` | gera migração a partir dos schemas |
 | `pnpm --filter @soscomida/api db:migrate` | aplica migrações |
 

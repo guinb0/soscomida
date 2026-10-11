@@ -1,6 +1,6 @@
 'use client';
 
-import type { Me } from '@soscomida/contracts';
+import type { Me, Session } from '@soscomida/contracts';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ApiClientError, api } from './api';
@@ -25,14 +25,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 export function useMe() {
   return useQuery({
     queryKey: ['me'],
-    queryFn: async () => {
-      try {
-        return await api<Me>('/auth/me');
-      } catch (erro) {
-        if (erro instanceof ApiClientError && erro.status === 401) return null;
-        throw erro;
-      }
-    },
+    queryFn: async (): Promise<Me | null> => (await api<Session>('/auth/session')).user,
   });
 }
 

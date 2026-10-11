@@ -8,6 +8,8 @@ x-api-env: &api-env
     NODE_ENV: production
     DATABASE_URL: postgres://soscomida:${POSTGRES_PASSWORD}@postgres:5432/soscomida
     REDIS_URL: redis://redis:6379
+    WEB_REVALIDATE_URL: http://web:3000/interno/revalidar
+    WEB_REVALIDATE_SECRET: ${REVALIDATE_SECRET}
 
 services:
   traefik:
@@ -31,6 +33,7 @@ services:
     image: ${REGISTRY}/soscomida-web:${TAG}
     environment:
       API_INTERNAL_URL: http://api:4000
+      REVALIDATE_SECRET: ${REVALIDATE_SECRET}
     labels:
       - traefik.enable=true
       - traefik.http.routers.web.rule=Host(`${DOMAIN}`)

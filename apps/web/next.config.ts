@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import path from 'node:path';
 
 /**
  * O navegador fala só com este domínio: `/api/*` é repassado à API. Assim o
@@ -15,7 +16,10 @@ const securityHeaders = [
 ];
 
 const config: NextConfig = {
-  output: 'standalone',
+  // Servidor autocontido só na imagem Docker (infra/docker/web.Dockerfile); `next start` não funciona com ele.
+  output: process.env.NEXT_OUTPUT_STANDALONE === '1' ? 'standalone' : undefined,
+  // Monorepo: o rastreamento de arquivos do standalone parte da raiz (pacotes do workspace).
+  outputFileTracingRoot: path.resolve(process.cwd(), '../..'),
   poweredByHeader: false,
   async rewrites() {
     return [{ source: '/api/:path*', destination: `${API_INTERNAL_URL}/api/:path*` }];

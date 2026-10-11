@@ -3,10 +3,10 @@ import { BadgeCheck, FileSearch, HandCoins, Receipt } from 'lucide-react';
 import Link from 'next/link';
 import { CampaignCard } from '@/components/campaign-card';
 import { Container, buttonClass } from '@/components/ui';
-import { publicApi } from '@/lib/server-api';
+import { cacheTags, publicApi } from '@/lib/server-api';
 
 // Renderizada por requisição: o build não depende da API no ar. Os dados
-// continuam em cache por `revalidate` no fetch de publicApi.
+// continuam em cache (publicApi), invalidado pelo worker quando algo muda.
 export const dynamic = 'force-dynamic';
 
 const PASSOS = [
@@ -17,7 +17,7 @@ const PASSOS = [
 ];
 
 export default async function HomePage() {
-  const destaques = await publicApi<CampaignList>('/campaigns?pageSize=6&sort=recentes');
+  const destaques = await publicApi<CampaignList>('/campaigns?pageSize=6&sort=recentes', { tags: [cacheTags.campaigns] });
 
   return (
     <>

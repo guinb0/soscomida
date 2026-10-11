@@ -42,6 +42,7 @@ type CampaignRow = typeof campaigns.$inferSelect;
 
 export const CAMPAIGN_EVENTS = {
   statusChanged: 'CampaignStatusChanged',
+  updatePosted: 'CampaignUpdatePosted',
 } as const;
 
 export interface StatusChangeCommand {
@@ -232,7 +233,10 @@ export class CampaignsService {
       throw new DomainError('NOT_PUBLIC', 'Atualizações só podem ser publicadas em campanhas visíveis ao público', HttpStatus.CONFLICT);
     }
     const id = newId();
-    await this.db.insert(campaignUpdates).values({ id, campaignId, authorId: auth.userId, title: input.title, body: input.body });
+    await this.db.transaction(async (tx) => {
+      await tx.insert(campaignUpdates).values({ id, campaignId, authorId: auth.userId, title: input.title, body: input.body });
+      await this.outbox.add(tx, { type: CAMPAIGN_EVENTS.updatePosted, aggregateType: 'campaign', aggregateId: campaignId, payload: { campaignId, updateId: id } });
+    });
     return { id, ...input, createdAt: new Date().toISOString() };
   }
 
@@ -373,7 +377,14 @@ export class CampaignsService {
       type: CAMPAIGN_EVENTS.statusChanged,
       aggregateType: 'campaign',
       aggregateId: campaignId,
-      payload: { campaignId, from: campanha.status, to: resultado.to, action: cmd.action, organizerId: campanha.organizerId },
+      payload: {
+        campaignId,
+        from: campanha.status,
+        to: resultado.to,
+        action: cmd.action,
+        organizerId: campanha.organizerId,
+        reason: cmd.reason?.trim() || null,
+      },
     });
     return resultado.to;
   }

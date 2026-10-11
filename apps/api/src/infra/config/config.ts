@@ -50,6 +50,22 @@ const envSchema = z
     ASAAS_ADAPTER_VERIFIED: booleanFromEnv,
     PIX_EXPIRATION_MINUTES: z.coerce.number().int().min(5).max(24 * 60).default(60),
 
+    /**
+     * log = só registra no log (testes). smtp = envia por SMTP_URL; em
+     * desenvolvimento, o Mailpit do compose (http://localhost:8025).
+     */
+    EMAIL_PROVIDER: z.enum(['log', 'smtp']).default('log'),
+    /** Ex.: smtp://usuario:senha@smtp.provedor.com:587 (URL de transporte do nodemailer). */
+    SMTP_URL: z.string().optional(),
+    EMAIL_FROM: z.string().default('SOS Comida <nao-responda@soscomida.local>'),
+
+    /**
+     * Rota do site que expira o cache das páginas públicas
+     * (ex.: http://web:3000/interno/revalidar). Sem ela, o cache expira sozinho em até 5 min.
+     */
+    WEB_REVALIDATE_URL: z.url().optional(),
+    WEB_REVALIDATE_SECRET: z.string().min(32, 'Use pelo menos 32 caracteres aleatórios').optional(),
+
     /** Se definido, /api/metrics exige `Authorization: Bearer <token>`. */
     METRICS_TOKEN: z.string().optional(),
   })
@@ -60,6 +76,15 @@ const envSchema = z
         path: ['PAYMENTS_PROVIDER'],
         message: 'O provedor de desenvolvimento gera cobranças não pagáveis e é proibido fora de development/test.',
       });
+    }
+    if (env.WEB_REVALIDATE_URL && !env.WEB_REVALIDATE_SECRET) {
+      ctx.addIssue({ code: 'custom', path: ['WEB_REVALIDATE_SECRET'], message: 'WEB_REVALIDATE_SECRET é obrigatório com WEB_REVALIDATE_URL' });
+    }
+    if (env.EMAIL_PROVIDER === 'smtp' && !env.SMTP_URL) {
+      ctx.addIssue({ code: 'custom', path: ['SMTP_URL'], message: 'SMTP_URL é obrigatório com EMAIL_PROVIDER=smtp' });
+    }
+    if (env.NODE_ENV === 'production' && env.EMAIL_PROVIDER !== 'smtp') {
+      ctx.addIssue({ code: 'custom', path: ['EMAIL_PROVIDER'], message: 'Em produção os e-mails precisam sair de verdade: use EMAIL_PROVIDER=smtp.' });
     }
     if (env.PAYMENTS_PROVIDER === 'asaas') {
       for (const chave of ['ASAAS_BASE_URL', 'ASAAS_API_KEY', 'ASAAS_WEBHOOK_TOKEN'] as const) {

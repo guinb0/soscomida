@@ -9,32 +9,13 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  TURBO_TELEMETRY_DISABLED: "1"
+
 jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 25
-
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: soscomida
-          POSTGRES_PASSWORD: soscomida_dev
-          POSTGRES_DB: soscomida_test
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U soscomida" --health-interval 5s --health-timeout 3s --health-retries 20
-      redis:
-        image: redis:7-alpine
-        ports: ["6379:6379"]
-        options: >-
-          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
-
-    env:
-      TEST_DATABASE_URL: postgres://soscomida:soscomida_dev@localhost:5432/soscomida_test
-      TEST_REDIS_URL: redis://localhost:6379/1
-      TURBO_TELEMETRY_DISABLED: "1"
-
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -42,8 +23,41 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      # Mesma infraestrutura do desenvolvimento: Postgres, Redis, S3 (SeaweedFS) e Mailpit.
+      - run: pnpm dev:infra
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm dev:infra
+      - run: pnpm install --frozen-lockfile
+      - name: Arquivos .env de desenvolvimento
+        run: |
+          SEGREDO=$(node -e "console.log(require('crypto').randomBytes(36).toString('base64url'))")
+          cp apps/api/.env.example apps/api/.env
+          sed -i "s|^MFA_ENCRYPTION_KEY=.*|MFA_ENCRYPTION_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")|" apps/api/.env
+          printf 'WEB_REVALIDATE_URL=http://127.0.0.1:3000/interno/revalidar\nWEB_REVALIDATE_SECRET=%s\n' "$SEGREDO" >> apps/api/.env
+          cp apps/web/.env.example apps/web/.env
+          sed -i "s|^REVALIDATE_SECRET=.*|REVALIDATE_SECRET=$SEGREDO|" apps/web/.env
+      - run: pnpm build
+      - run: pnpm --filter @soscomida/api db:migrate
+      - run: pnpm --filter @soscomida/e2e exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: tests/e2e/playwright-report
+          retention-days: 7

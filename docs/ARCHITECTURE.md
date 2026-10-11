@@ -131,20 +131,21 @@ está em `index.ts` (fachada). Fases indicam quando o módulo ganha código.
 | `fraud-detection` | sinais, regras, score | 3 |
 | `ai-analysis` | análise semântica de aderência | 3 |
 | `disputes` | contestação e recursos | 3 |
-| `notifications` | e-mail e notificações internas | 1→2 |
+| `notifications` | e-mails disparados por eventos (doação confirmada, decisões da moderação) | 1 |
+| `web-cache` | avisa o site para expirar o cache das páginas públicas quando a campanha muda | 1 |
 | `administration` | configurações, políticas de risco | 3 |
 
 ### Regras de dependência (verificadas pelo ESLint)
 
 1. Um módulo só importa outro pelo `index.ts` dele
    (`@/modules/ledger`), nunca por caminhos internos
-   (`@/modules/ledger/domain/...`). A regra `no-restricted-imports` em
-   `apps/api/eslint.config.mjs` reprova o build se isso acontecer.
+   (`@/modules/ledger/domain/...`). A regra própria `local/module-boundaries`
+   (`apps/api/eslint/module-boundaries.mjs`) reprova o lint se isso acontecer.
 2. Dependências são acíclicas e seguem a ordem abaixo (quem está acima pode
    depender de quem está abaixo, nunca o contrário):
 
    ```
-   transparency, moderation
+   notifications, web-cache, transparency, moderation
      → donations → payments → ledger
      → campaigns → storage
      → identity, audit, outbox → infra (db, config, observability)

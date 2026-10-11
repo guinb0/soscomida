@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { CampaignCard } from '@/components/campaign-card';
 import { Container, Input, PageTitle, Select, buttonClass } from '@/components/ui';
-import { publicApi } from '@/lib/server-api';
+import { cacheTags, publicApi } from '@/lib/server-api';
 
 export const metadata: Metadata = { title: 'Campanhas' };
 
@@ -16,7 +16,7 @@ export default async function CampanhasPage({ searchParams }: { searchParams: Se
 
   const params = new URLSearchParams();
   for (const [chave, valor] of Object.entries(query)) if (valor !== undefined) params.set(chave, String(valor));
-  const lista = await publicApi<CampaignList>(`/campaigns?${params}`, 30);
+  const lista = await publicApi<CampaignList>(`/campaigns?${params}`, { tags: [cacheTags.campaigns] });
   const totalPaginas = Math.max(1, Math.ceil(lista.total / lista.pageSize));
 
   const linkPagina = (page: number) => {

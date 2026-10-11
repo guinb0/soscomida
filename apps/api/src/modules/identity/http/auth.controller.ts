@@ -7,11 +7,13 @@ import {
   type MfaCodeInput,
   type MfaSetup,
   type RegisterInput,
+  type Session,
   loginInputSchema,
   meSchema,
   mfaCodeInputSchema,
   mfaSetupSchema,
   registerInputSchema,
+  sessionSchema,
 } from '@soscomida/contracts';
 import type { CookieOptions, Response } from 'express';
 import { APP_CONFIG, type AppConfig } from '../../../infra/config/config';
@@ -82,6 +84,14 @@ export class AuthController {
     await this.identity.logoutAll(auth.userId, meta);
     res.clearCookie(this.config.sessionCookieName, this.cookieOptions());
     return { ok: true };
+  }
+
+  /** Para o site: 200 com `user: null` para visitantes (evita um 401 a cada página). */
+  @Public()
+  @Get('session')
+  @ApiZodResponse(sessionSchema)
+  session(@CurrentUser() auth: AuthContext | undefined): Session {
+    return { user: auth ? this.identity.me(auth) : null };
   }
 
   @Get('me')

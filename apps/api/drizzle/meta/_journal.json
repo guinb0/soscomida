@@ -15,6 +15,13 @@
       "when": 1791670073769,
       "tag": "0001_campanhas_doacoes_ledger",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791759205940,
+      "tag": "0002_notificacoes_email",
+      "breakpoints": true
     }
   ]
 }

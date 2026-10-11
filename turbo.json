@@ -3,11 +3,12 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+      "env": ["API_INTERNAL_URL", "NEXT_OUTPUT_STANDALONE"]
     },
     "typecheck": { "dependsOn": ["^build"] },
     "lint": { "dependsOn": ["^build"] },
-    "test": { "dependsOn": ["^build"], "env": ["TEST_DATABASE_URL", "TEST_REDIS_URL"] },
+    "test": { "dependsOn": ["^build"], "env": ["TEST_DATABASE_URL", "TEST_REDIS_URL", "TEST_S3_ENDPOINT"] },
     "dev": { "cache": false, "persistent": true, "dependsOn": ["^build"] }
   }
 }

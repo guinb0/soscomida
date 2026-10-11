@@ -4,10 +4,12 @@ import { DonationsModule } from './donations';
 import { IdentityModule } from './identity';
 import { LedgerModule } from './ledger';
 import { ModerationModule } from './moderation';
+import { NotificationsModule } from './notifications';
 import { OutboxModule } from './outbox';
 import { PaymentsModule } from './payments';
 import { StorageModule } from './storage';
 import { TransparencyModule } from './transparency';
+import { WebCacheModule } from './web-cache';
 
 /**
  * Módulos de domínio carregados pela API e pelo worker. A ordem segue as
@@ -24,4 +26,6 @@ export const DOMAIN_MODULES = [
   PaymentsModule,
   DonationsModule,
   TransparencyModule,
+  NotificationsModule,
+  WebCacheModule,
 ];

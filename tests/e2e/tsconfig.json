@@ -1,0 +1,5 @@
+{
+  "extends": "@soscomida/config/tsconfig.node.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["*.ts", "specs"]
+}

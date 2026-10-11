@@ -27,9 +27,9 @@ de moderador exige MFA e que import cruzando fronteira de módulo quebra o lint.
 - [x] Ledger de dupla entrada com testes de propriedade
 - [x] Painel do doador (minhas doações) e do organizador (arrecadação)
 - [x] Transparência v1: arrecadação confirmada, tarifas, estornos, orçamento planejado
-- [ ] Notificações por e-mail (doação confirmada, campanha aprovada) — log em dev — **não feito**: fica para o início da Fase 2 (os eventos já existem no outbox; falta o consumidor e o provedor de e-mail)
+- [x] Notificações por e-mail (doação confirmada para quem doou logado; decisões da moderação, investigação e fim de prazo para quem organiza) — Mailpit em dev, SMTP em produção
 
-**Situação (2026-10-11):** critérios 1–6 cobertos por testes de integração (92 testes na API) e por um teste de fumaça manual da stack completa pelo navegador/proxy (cadastro → campanha com imagem → moderação com MFA → Pix simulado → transparência). Critério 7: fluxo `dev` verificado; `asaas` sandbox **não verificado** (aguarda credenciais).
+**Situação (2026-10-11):** critérios 1–6 cobertos por testes de integração (103 na API) e pelo e2e Playwright no navegador (desktop e celular: cadastro → campanha → moderação com MFA → publicação → Pix simulado → valor na página pública → e-mail no Mailpit). Critério 7: fluxo `dev` verificado; `asaas` sandbox **não verificado** (aguarda credenciais).
 
 **Critérios de aceitação do MVP:**
 

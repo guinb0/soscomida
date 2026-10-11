@@ -26,6 +26,13 @@ describe('cadastro, login e sessão', () => {
     expect(me.body).toMatchObject({ name: 'Maria', email: email.toLowerCase(), roles: [], mfaEnabled: false });
   });
 
+  it('/auth/session responde 200 para visitante e logado', async () => {
+    await agent(t.app).get('/api/auth/session').expect(200, { user: null });
+    const { http, email } = await registeredUser(t.app, 'Sessão');
+    const res = await http.get('/api/auth/session').expect(200);
+    expect(res.body.user).toMatchObject({ email, name: 'Sessão' });
+  });
+
   it('recusa e-mail duplicado', async () => {
     const { email } = await registeredUser(t.app);
     const res = await agent(t.app).post('/api/auth/register').send({ name: 'Outra', email, password: PASSWORD }).expect(409);

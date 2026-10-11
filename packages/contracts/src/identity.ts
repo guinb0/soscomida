@@ -35,6 +35,10 @@ export const meSchema = z.object({
 });
 export type Me = z.infer<typeof meSchema>;
 
+/** Sessão atual sem erro para visitantes: `user` nulo quando não há login. */
+export const sessionSchema = z.object({ user: meSchema.nullable() });
+export type Session = z.infer<typeof sessionSchema>;
+
 export const mfaSetupSchema = z.object({
   /** URI otpauth:// para o app autenticador (QR Code no front). */
   otpauthUri: z.string(),

@@ -24,8 +24,19 @@ S3           (externo: Cloudflare R2 ou Backblaze B2; SeaweedFS só em dev)
 
 ## Deploy
 
-CI (GitHub Actions) roda lint, tipagem, testes e build em todo push. Em tag
-`v*`: monta imagens, publica no registry, e o deploy na VPS faz:
+CI (GitHub Actions) roda lint, tipagem, testes, build e o e2e (Playwright) em
+todo push, com a mesma infraestrutura do `pnpm dev:infra`. **Ainda não existe**
+o workflow de release (montar e publicar imagens em tag `v*`); até lá:
+
+```bash
+docker build -f infra/docker/api.Dockerfile -t $REGISTRY/soscomida-api:$TAG .
+docker build -f infra/docker/web.Dockerfile -t $REGISTRY/soscomida-web:$TAG .
+```
+
+As duas imagens foram construídas e testadas localmente em 2026-10-11 (API
+421 MB, site 303 MB): a API subiu, migrou e cadastrou usuário (Argon2 nativo no
+Alpine); o site renderizou e repassou `/api` para a API. Segredos: copie
+`infra/docker/.env.prod.example` para `.env.prod` no servidor. O deploy na VPS faz:
 
 1. `docker compose pull`
 2. `docker compose run --rm api node dist/infra/db/migrate.js` (migrações são
@@ -47,6 +58,22 @@ uso depende da coluna.
 - **Teste de restauração mensal** em máquina descartável
   (`infra/scripts/restore-db.sh`) — backup que nunca foi restaurado não conta.
 - Buckets S3 com versionamento ligado no bucket privado.
+
+## Cache das páginas públicas
+
+As páginas de campanha ficam em cache no servidor do site (até 5 min). O
+worker expira o cache na hora quando a campanha muda de status, recebe ou
+estorna doação ou publica atualização: chama `WEB_REVALIDATE_URL`
+(`/interno/revalidar` no site) com `WEB_REVALIDATE_SECRET`, o mesmo valor de
+`REVALIDATE_SECRET` do site. Se o site não responder, só se perde a
+antecipação: o cache expira sozinho.
+
+## E-mail
+
+Produção exige `EMAIL_PROVIDER=smtp` com `SMTP_URL` de um serviço transacional
+(SES, Brevo, Resend...). Configure SPF, DKIM e DMARC do domínio antes de
+ligar, ou os avisos caem no spam. Em desenvolvimento tudo vai para o Mailpit
+(http://localhost:8025) e nada sai para a internet.
 
 ## CORS dos buckets
 

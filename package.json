@@ -11,6 +11,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:e2e": "pnpm --filter @soscomida/e2e test:e2e",
     "dev:infra": "docker compose -f infra/docker/compose.dev.yml up -d --wait",
     "dev:infra:down": "docker compose -f infra/docker/compose.dev.yml down"
   },
