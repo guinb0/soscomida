@@ -1,5 +1,5 @@
 import { parseAccessKey } from '@soscomida/shared';
-import { getDocumentProxy } from 'unpdf';
+import { getDocumentProxy, renderPageAsImage } from 'unpdf';
 
 const MAX_PAGES = 5;
 
@@ -34,6 +34,15 @@ async function lerTexto(conteudo: Buffer): Promise<string> {
   } finally {
     await pdf.cleanup();
   }
+}
+
+/**
+ * Primeira página do PDF como imagem PNG, para o OCR de PDF escaneado (que
+ * não tem camada de texto).
+ */
+export async function pdfFirstPageImage(conteudo: Buffer): Promise<Buffer> {
+  const png = await renderPageAsImage(new Uint8Array(conteudo), 1, { canvasImport: () => import('@napi-rs/canvas'), scale: 2 });
+  return Buffer.from(png);
 }
 
 export type KeyInText = { kind: 'FOUND'; accessKey: string } | { kind: 'NONE' } | { kind: 'AMBIGUOUS'; count: number };

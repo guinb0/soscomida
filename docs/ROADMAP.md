@@ -77,9 +77,10 @@ de moderador exige MFA e que import cruzando fronteira de módulo quebra o lint.
 - [x] Avaliação automatizada (16 casos sintéticos, comando `ai-eval`)
 - [x] Antifraude determinístico: assinatura XMLDSig, hash perceptual de imagens, chave lida do texto do PDF
 - [ ] Rodar a avaliação com um modelo real (custa dinheiro; precisa de chave e autorização)
-- [ ] Validar a cadeia ICP-Brasil do certificado da assinatura
-- [ ] OCR/IA multimodal para foto sem QR e PDF escaneado
-- [ ] Painel de administração das políticas de risco (hoje os pesos estão no código, versionados)
+- [x] Validar a cadeia ICP-Brasil do certificado da assinatura (sem consulta de revogação)
+- [x] OCR local (Tesseract) para foto sem QR e PDF escaneado — não medido com fotos reais
+- [ ] Consulta de revogação (LCR/OCSP) dos certificados
+- [x] Política de risco editável pela administração, com versões e auditoria
 
 ## Fase 4 — Financeiro avançado
 

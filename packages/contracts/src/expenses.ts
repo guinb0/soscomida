@@ -339,3 +339,41 @@ export const publicExpenseSchema = z.object({
   fiscalDocuments: z.array(fiscalDocumentSchema.omit({ id: true, verificationReason: true })),
 });
 export type PublicExpense = z.infer<typeof publicExpenseSchema>;
+
+// --- Política de risco (editável pela administração) ---------------------------
+
+const pontos = z.number().int().min(0).max(100);
+export const RISK_FISCAL_KEYS = ['CANCELLED', 'NOT_FOUND', 'DIVERGENT'] as const;
+
+/** Pesos e limites do motor de risco. Cada alteração vira uma nova versão (histórico só-inserção). */
+export const riskPolicyRulesSchema = z
+  .object({
+    flagPoints: z.object(Object.fromEntries(EXPENSE_FLAGS.map((f) => [f, pontos])) as Record<ExpenseFlag, typeof pontos>),
+    fiscalPoints: z.object({ CANCELLED: pontos, NOT_FOUND: pontos, DIVERGENT: pontos }),
+    aiPoints: z.object(Object.fromEntries(ADHERENCE_CLASSIFICATIONS.map((c) => [c, pontos])) as Record<AdherenceClassification, typeof pontos>),
+    /** Sinais que, sozinhos, põem a despesa em risco alto. */
+    hardFlags: z.array(expenseFlagSchema).max(EXPENSE_FLAGS.length),
+    mediumFrom: z.number().int().min(1).max(99),
+    highFrom: z.number().int().min(2).max(100),
+  })
+  .refine((p) => p.highFrom > p.mediumFrom, { message: 'O limite de risco alto precisa ser maior que o de risco médio', path: ['highFrom'] });
+export type RiskPolicyRules = z.infer<typeof riskPolicyRulesSchema>;
+
+export const riskPolicyInputSchema = z.object({
+  rules: riskPolicyRulesSchema,
+  /** Versão em que a edição se baseou (conflito se outra pessoa salvou antes). */
+  basedOnVersion: z.number().int().min(0),
+  reason: z.string().trim().min(10, 'Explique o motivo da mudança').max(1000),
+});
+export type RiskPolicyInput = z.infer<typeof riskPolicyInputSchema>;
+
+export const riskPolicySchema = z.object({
+  version: z.number().int(),
+  /** Nome gravado em cada análise (ex.: risco-v1 para o padrão do código, politica-3). */
+  label: z.string(),
+  rules: riskPolicyRulesSchema,
+  reason: z.string().nullable(),
+  createdBy: z.string().nullable(),
+  createdAt: z.string().nullable(),
+});
+export type RiskPolicy = z.infer<typeof riskPolicySchema>;

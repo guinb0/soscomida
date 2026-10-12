@@ -6,9 +6,10 @@ import { DB, type Database } from '../../infra/db/db';
 import { newId } from '../../infra/ids';
 import { AiService, LLM_PROVIDER, type LlmProvider, SimulatedLlmProvider, detectSuspiciousInstructions } from '../ai';
 import { ADHERENCE_PROMPT_VERSION, ADHERENCE_SYSTEM_PROMPT, buildAdherenceCase, simulatedAdherence } from './domain/adherence';
-import { RULESET_VERSION, computeRisk } from './domain/risk';
+import { computeRisk } from './domain/risk';
 import { ExpensesService } from './expenses.service';
 import { expenseAnalyses } from './infra/expenses.schema';
+import { RiskPolicyService } from './risk-policy.service';
 
 type AnalysisRow = typeof expenseAnalyses.$inferSelect;
 
@@ -23,6 +24,7 @@ export class ExpenseAnalysisService {
     @Inject(DB) private readonly db: Database,
     private readonly expenses: ExpensesService,
     private readonly ai: AiService,
+    private readonly policies: RiskPolicyService,
     @Inject(LLM_PROVIDER) provider: LlmProvider | null,
   ) {
     if (provider instanceof SimulatedLlmProvider) provider.register(ADHERENCE_PROMPT_VERSION, simulatedAdherence);
@@ -51,7 +53,8 @@ export class ExpenseAnalysisService {
       schema: adherenceOutputSchema,
     });
     const aiStatus: AiStatus = ia.ok ? 'COMPLETED' : ia.reason;
-    const risco = computeRisk({ flags: entrada.flags, fiscalCheck: entrada.fiscalCheck, ai: { status: aiStatus, output: ia.ok ? ia.output : null } });
+    const politica = await this.policies.current();
+    const risco = computeRisk({ flags: entrada.flags, fiscalCheck: entrada.fiscalCheck, ai: { status: aiStatus, output: ia.ok ? ia.output : null } }, politica.rules);
 
     const linha: typeof expenseAnalyses.$inferInsert = {
       id: newId(),
@@ -60,7 +63,7 @@ export class ExpenseAnalysisService {
       trigger,
       sourceEventId: opts.sourceEventId ?? null,
       requestedBy: opts.requestedBy ?? null,
-      rulesetVersion: RULESET_VERSION,
+      rulesetVersion: politica.label,
       riskScore: risco.score,
       riskLevel: risco.level,
       riskFactors: risco.factors,

@@ -1,6 +1,10 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
+  type RiskPolicy,
+  type RiskPolicyInput,
+  riskPolicyInputSchema,
+  riskPolicySchema,
   type AppealInput,
   type AttachDocumentInput,
   type ExpenseAnalysis,
@@ -30,6 +34,7 @@ import { ApiZodBody, ApiZodResponse, ZodPipe } from '../../infra/http/zod';
 import { AiService } from '../ai';
 import { type AuthContext, CurrentUser, Roles } from '../identity';
 import { ExpenseAnalysisService } from './expense-analysis.service';
+import { RiskPolicyService } from './risk-policy.service';
 import { ExpensesService } from './expenses.service';
 
 const ORGANIZER_ACTIONS = ['submit', 'withdraw', 'cancel'] as const;
@@ -210,5 +215,28 @@ export class PublicExpensesController {
   @Get(':slug/expenses')
   list(@Param('slug') slug: string): Promise<PublicExpense[]> {
     return this.expenses.listPublic(slug);
+  }
+}
+
+/** Política de risco: a equipe de revisão consulta; só a administração publica nova versão. */
+@ApiTags('despesas (revisão)')
+@Controller('moderation/risk-policy')
+@Roles('moderator', 'admin')
+export class RiskPolicyController {
+  constructor(private readonly policies: RiskPolicyService) {}
+
+  @Get()
+  async get(): Promise<{ current: RiskPolicy; history: RiskPolicy[] }> {
+    const [current, history] = await Promise.all([this.policies.current(), this.policies.history()]);
+    return { current, history };
+  }
+
+  @Post()
+  @HttpCode(200)
+  @Roles('admin')
+  @ApiZodBody(riskPolicyInputSchema)
+  @ApiZodResponse(riskPolicySchema)
+  publish(@CurrentUser() auth: AuthContext, @Body(new ZodPipe(riskPolicyInputSchema)) input: RiskPolicyInput): Promise<RiskPolicy> {
+    return this.policies.publish(auth, input);
   }
 }

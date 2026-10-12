@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 /**
  * Ambiente dos testes de integração. Usa a infraestrutura de `pnpm dev:infra`
  * (banco `soscomida_test` e Redis db 1), ou o que vier de TEST_DATABASE_URL /
@@ -22,5 +24,7 @@ export const TEST_ENV: Record<string, string> = {
   FISCAL_VERIFICATION_PROVIDER: 'dev',
   // Regras locais no lugar da IA: nenhum dado sai da máquina e não há custo.
   AI_PROVIDER: 'simulated',
+  // AC FICTÍCIA dos certificados de teste (test/fixtures/certificados).
+  FISCAL_EXTRA_TRUST_ANCHORS: path.resolve(__dirname, 'fixtures/certificados/ac-teste.pem'),
   AUTH_RATE_LIMIT_PER_MINUTE: '1000',
 };

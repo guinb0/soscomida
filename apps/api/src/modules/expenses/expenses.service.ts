@@ -138,8 +138,10 @@ export class ExpensesService {
           extractionStatus: alocacao ? 'EXTRACTED' : 'NEEDS_TOTAL',
           extractionMessage: alocacao
             ? null
-            : extraction.kind === 'PDF_KEY'
-              ? 'Chave de acesso lida do PDF. Confira e informe o valor total da nota.'
+            : extraction.kind === 'TEXT_KEY'
+              ? extraction.origin === 'OCR'
+                ? 'Chave de acesso lida da imagem por OCR: confira os 44 dígitos com o cupom e informe o valor total.'
+                : 'Chave de acesso lida do PDF. Confira e informe o valor total da nota.'
               : 'O QR Code não informa o total da nota. Informe o valor total impresso no cupom.',
         });
       }

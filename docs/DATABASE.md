@@ -110,6 +110,7 @@ de acesso).
 | `expenses` + | risk_score, risk_level (projeção da última análise), rejected_by, appeal_reason, appealed_at | contestação: ambos nulos ou ambos preenchidos |
 | `fiscal_documents` + | signature_status (`VALID`,`MISSING`,`INVALID`), signature_details | só XML |
 | `stored_files` + | perceptual_hash (dHash, 16 hex) | só imagens de comprovantes; comparação com `bit_count(... # ...)` |
+| `risk_policies` (0005) | version, rules (pesos e limites), reason, created_by | **só inserção**; `UNIQUE(version)`; publicação serializada por advisory lock + versão base |
 
 Contestação reabre uma despesa recusada: como a recusa liberou a parte das
 notas, `appeal` trava cada nota e confere de novo o limite do rateio antes de

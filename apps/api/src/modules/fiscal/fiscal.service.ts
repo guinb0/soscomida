@@ -10,7 +10,10 @@ import { type ParsedNfe, parseNfeXml } from './domain/nfe-xml';
 import { type SignatureCheck, type SignatureDetails, signatureDetails, verifyNfeSignature } from './domain/xml-signature';
 import { FISCAL_VERIFICATION_PROVIDERS, type FiscalVerificationProvider, type FiscalVerificationResult } from './domain/verification';
 import { fiscalDocumentItems, fiscalDocuments, fiscalVerifications } from './infra/fiscal.schema';
-import { findAccessKeys, pdfText } from './infra/pdf-text';
+import type { TrustStore } from './domain/icp-chain';
+import { findAccessKeys, pdfFirstPageImage, pdfText } from './infra/pdf-text';
+import { RECEIPT_OCR, type ReceiptOcr } from './infra/receipt-ocr';
+import { FISCAL_TRUST_STORE } from './infra/trust-store';
 import { readQrCode } from './infra/qr-reader';
 
 export const FISCAL_EVENTS = {
@@ -30,8 +33,8 @@ const XML_ERRORS: Record<string, string> = {
 export type Extraction =
   | { kind: 'NFE_XML'; parsed: ParsedNfe; signature: SignatureCheck }
   | { kind: 'NFCE_QR'; qr: NfceQrData }
-  /** Chave achada no texto do PDF (DANFE); o total vem do organizador. */
-  | { kind: 'PDF_KEY'; accessKey: string }
+  /** Chave achada no texto do PDF ou por OCR da imagem; o total vem do organizador. */
+  | { kind: 'TEXT_KEY'; accessKey: string; origin: 'PDF_TEXT' | 'OCR' }
   | { kind: 'NONE'; reason: string };
 
 export interface FiscalDocumentView {
@@ -75,6 +78,8 @@ export class FiscalService {
   constructor(
     @Inject(DB) private readonly db: Database,
     @Inject(FISCAL_VERIFICATION_PROVIDERS) private readonly providers: FiscalVerificationProvider[],
+    @Inject(FISCAL_TRUST_STORE) private readonly trust: TrustStore,
+    @Inject(RECEIPT_OCR) private readonly ocr: ReceiptOcr,
     private readonly storage: StorageService,
     private readonly outbox: OutboxService,
   ) {}
@@ -88,25 +93,45 @@ export class FiscalService {
     if (info.mimeType === 'application/xml') {
       const r = parseNfeXml(conteudo);
       if (!r.ok) throw new DomainError(`FISCAL_${r.error}`, XML_ERRORS[r.error] ?? 'XML não reconhecido');
-      return { kind: 'NFE_XML', parsed: r.value, signature: verifyNfeSignature(conteudo.toString('utf8')) };
+      return { kind: 'NFE_XML', parsed: r.value, signature: verifyNfeSignature(conteudo.toString('utf8'), this.trust) };
     }
     if (info.mimeType.startsWith('image/')) {
       const texto = await readQrCode(conteudo);
-      if (!texto) return { kind: 'NONE', reason: 'Nenhum QR Code encontrado na imagem. Informe a chave de acesso impressa no cupom.' };
-      const qr = parseNfceQrCode(texto);
-      if (!qr.ok) return { kind: 'NONE', reason: 'O QR Code encontrado não é de uma NFC-e válida. Informe a chave de acesso.' };
-      return { kind: 'NFCE_QR', qr: qr.value };
+      if (texto) {
+        const qr = parseNfceQrCode(texto);
+        if (qr.ok) return { kind: 'NFCE_QR', qr: qr.value };
+      }
+      // Sem QR legível: OCR da chave impressa.
+      const pelaFoto = await this.keyByOcr(conteudo);
+      if (pelaFoto) return pelaFoto;
+      return {
+        kind: 'NONE',
+        reason: texto
+          ? 'O QR Code encontrado não é de uma NFC-e válida e a chave não foi lida na foto. Informe a chave de acesso.'
+          : 'Não foi possível ler o QR Code nem a chave de acesso na foto. Informe a chave impressa no cupom.',
+      };
     }
     const texto = await pdfText(conteudo).catch(() => '');
     const achado = findAccessKeys(texto);
-    if (achado.kind === 'FOUND') return { kind: 'PDF_KEY', accessKey: achado.accessKey };
+    if (achado.kind === 'FOUND') return { kind: 'TEXT_KEY', accessKey: achado.accessKey, origin: 'PDF_TEXT' };
     if (achado.kind === 'AMBIGUOUS') return { kind: 'NONE', reason: `O PDF tem ${achado.count} chaves de acesso diferentes. Informe a chave desta nota.` };
+    if (!texto.trim()) {
+      // PDF escaneado: renderiza a primeira página e tenta o OCR.
+      const pagina = await pdfFirstPageImage(conteudo).catch(() => null);
+      const pelaImagem = pagina ? await this.keyByOcr(pagina) : null;
+      if (pelaImagem) return pelaImagem;
+    }
     return {
       kind: 'NONE',
       reason: texto.trim()
         ? 'Não achei a chave de acesso no texto do PDF. Informe a chave (44 dígitos) impressa no DANFE.'
-        : 'O PDF não tem texto (parece escaneado). Informe a chave de acesso (44 dígitos) impressa no DANFE.',
+        : 'O PDF é escaneado e a chave não foi lida. Informe a chave de acesso (44 dígitos) impressa no DANFE.',
     };
+  }
+
+  private async keyByOcr(imagem: Buffer): Promise<Extraction | null> {
+    const achado = findAccessKeys(await this.ocr.digits(imagem));
+    return achado.kind === 'FOUND' ? { kind: 'TEXT_KEY', accessKey: achado.accessKey, origin: 'OCR' } : null;
   }
 
   /**
@@ -260,7 +285,7 @@ export class FiscalService {
   private normalize(input: { extraction: Exclude<Extraction, { kind: 'NONE' }> } | { accessKey: string; declaredTotalCents: number }) {
     if ('accessKey' in input) return this.keyOnly(input.accessKey, input.declaredTotalCents);
     const e = input.extraction;
-    if (e.kind === 'PDF_KEY') return this.keyOnly(e.accessKey, null);
+    if (e.kind === 'TEXT_KEY') return this.keyOnly(e.accessKey, null);
     if (e.kind === 'NFCE_QR') {
       const k = e.qr.accessKey;
       return {

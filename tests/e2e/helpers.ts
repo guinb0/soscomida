@@ -14,7 +14,7 @@ export const sufixo = () => randomUUID().slice(0, 8);
 
 export const codigoTotp = (secret: string) => new TOTP({ algorithm: 'SHA1', digits: 6, period: 30, secret: Secret.fromBase32(secret) }).generate();
 
-export function concederPapel(email: string, papel: 'moderator'): void {
+export function concederPapel(email: string, papel: 'moderator' | 'admin'): void {
   // O e-mail é gerado pelo próprio teste (sem caracteres de shell).
   execSync(`pnpm --filter @soscomida/api grant-role ${email} ${papel}`, { cwd: RAIZ, stdio: 'ignore' });
 }
@@ -36,10 +36,10 @@ export async function cadastrarViaApi(ctx: BrowserContext, nome: string): Promis
   return email;
 }
 
-/** Moderadora com MFA ativo na sessão do contexto. */
-export async function moderadoraViaApi(ctx: BrowserContext): Promise<string> {
-  const email = await cadastrarViaApi(ctx, 'Moderadora E2E');
-  concederPapel(email, 'moderator');
+/** Moderadora (ou administradora) com MFA ativo na sessão do contexto. */
+export async function moderadoraViaApi(ctx: BrowserContext, papel: 'moderator' | 'admin' = 'moderator'): Promise<string> {
+  const email = await cadastrarViaApi(ctx, papel === 'admin' ? 'Administradora E2E' : 'Moderadora E2E');
+  concederPapel(email, papel);
   const api = apiDo(ctx);
   const { secret } = await api.post<{ secret: string }>('/auth/mfa/setup');
   await api.post('/auth/mfa/enable', { code: codigoTotp(secret) });

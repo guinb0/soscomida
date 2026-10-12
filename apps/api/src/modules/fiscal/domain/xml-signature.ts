@@ -1,6 +1,7 @@
 import { X509Certificate } from 'node:crypto';
 import { DOMParser } from '@xmldom/xmldom';
 import { SignedXml } from 'xml-crypto';
+import type { TrustStore } from './icp-chain';
 import { parseNfeXml } from './nfe-xml';
 
 /**
@@ -8,11 +9,11 @@ import { parseNfeXml } from './nfe-xml';
  *
  * O que VALID afirma: o trecho `infNFe` não foi alterado depois de assinado
  * pela chave do certificado embutido, e esse trecho é o mesmo que a plataforma
- * leu (chave, emitente, total e itens). O que NÃO afirma: que o certificado é
- * ICP-Brasil legítimo — a cadeia de certificação não é validada (falta o
- * repositório das ACs). Por isso o certificado é conferido à parte: CNPJ do
- * certificado × emitente, validade na data de emissão e autoassinatura.
- * Autenticidade fiscal continua dependendo da consulta oficial.
+ * leu (chave, emitente, total e itens). O certificado é conferido à parte:
+ * cadeia até uma raiz ICP-Brasil (icp-chain.ts, sem consulta de revogação),
+ * CNPJ do certificado × emitente e validade na data de emissão. Mesmo tudo
+ * certo, isso prova quem assinou o arquivo — não que a nota está autorizada
+ * no fisco: autenticidade fiscal continua dependendo da consulta oficial.
  */
 export type SignatureStatus = 'VALID' | 'MISSING' | 'INVALID';
 
@@ -28,6 +29,10 @@ export interface SignatureCertificate {
   matchesIssuer: boolean;
   /** Certificado válido na data de emissão da nota (null sem data). */
   validAtIssue: boolean | null;
+  /** Cadeia até uma raiz do repositório de confiança (ICP-Brasil). */
+  icpBrasil: boolean;
+  chain: string[];
+  chainProblem: string | null;
 }
 
 export type SignatureCheck =
@@ -68,7 +73,7 @@ const elementos = (raiz: Element | Document, nome: string): Element[] => {
   return r;
 };
 
-function lerCertificado(base64: string, emitente: string, emitidaEm: string | null): SignatureCertificate {
+function lerCertificado(base64: string, emitente: string, emitidaEm: string | null, confianca: TrustStore): SignatureCertificate {
   const der = Buffer.from(base64.replace(/\s+/g, ''), 'base64');
   const c = new X509Certificate(der);
   const cn = /(?:^|\n)CN=([^\n]+)/.exec(c.subject)?.[1] ?? '';
@@ -76,6 +81,8 @@ function lerCertificado(base64: string, emitente: string, emitidaEm: string | nu
   const inicio = new Date(c.validFrom);
   const fim = new Date(c.validTo);
   const emissao = emitidaEm ? new Date(emitidaEm) : null;
+  const dataValida = emissao && !Number.isNaN(emissao.getTime()) ? emissao : null;
+  const cadeia = confianca.chainFor(c, dataValida);
   return {
     subject: c.subject.replace(/\n/g, ', '),
     issuer: c.issuer.replace(/\n/g, ', '),
@@ -84,7 +91,10 @@ function lerCertificado(base64: string, emitente: string, emitidaEm: string | nu
     validTo: fim.toISOString(),
     selfSigned: c.subject === c.issuer && c.verify(c.publicKey),
     matchesIssuer: cnpj !== null && cnpj.slice(0, 8) === emitente.slice(0, 8),
-    validAtIssue: emissao && !Number.isNaN(emissao.getTime()) ? emissao >= inicio && emissao <= fim : null,
+    validAtIssue: dataValida ? dataValida >= inicio && dataValida <= fim : null,
+    icpBrasil: cadeia.trusted,
+    chain: cadeia.chain,
+    chainProblem: cadeia.problem,
   };
 }
 
@@ -93,6 +103,7 @@ export function certificateProblems(c: SignatureCertificate): string[] {
   if (!c.matchesIssuer) p.push(c.cnpj ? 'CNPJ do certificado diferente do emitente' : 'Certificado sem CNPJ de e-CNPJ ICP-Brasil');
   if (c.validAtIssue === false) p.push('Certificado fora da validade na data de emissão');
   if (c.selfSigned) p.push('Certificado autoassinado');
+  else if (!c.icpBrasil) p.push(c.chainProblem ?? 'Certificado fora da cadeia ICP-Brasil');
   return p;
 }
 
@@ -111,7 +122,7 @@ export function signatureDetails(c: SignatureCheck): SignatureDetails {
 }
 
 /** Confere a assinatura do emitente. Chamar só com XML já aceito por parseNfeXml. */
-export function verifyNfeSignature(xml: string): SignatureCheck {
+export function verifyNfeSignature(xml: string, confianca: TrustStore): SignatureCheck {
   const lido = parseNfeXml(xml);
   if (!lido.ok) return { status: 'INVALID', reason: 'MALFORMED' };
   const nota = lido.value;
@@ -146,7 +157,7 @@ export function verifyNfeSignature(xml: string): SignatureCheck {
   let certificado: SignatureCertificate;
   let pem: string;
   try {
-    certificado = lerCertificado(base64, nota.issuer.document, nota.issuedAt);
+    certificado = lerCertificado(base64, nota.issuer.document, nota.issuedAt, confianca);
     pem = `-----BEGIN CERTIFICATE-----\n${base64.replace(/\s+/g, '').replace(/.{64}/g, '$&\n')}\n-----END CERTIFICATE-----\n`;
   } catch {
     return { status: 'INVALID', reason: 'BAD_CERTIFICATE' };

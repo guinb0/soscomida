@@ -17,7 +17,8 @@
 > | Fila de revisão por risco, painel da análise, reanálise manual | `expenses` + `/moderacao/despesas` | feito |
 > | Contestação (uma por despesa, outra pessoa revisa) | `ExpensesService.appeal` | feito |
 > | Avaliação automatizada | `expenses/domain/adherence-eval.ts` + `pnpm --filter @soscomida/api ai-eval` | feito; **só rodada com o simulador** |
-> | OCR de foto sem QR / IA multimodal | — | **não feito** (decisão abaixo) |
+> | OCR de foto sem QR e de PDF escaneado (local, Tesseract) | `fiscal/infra/receipt-ocr.ts` | feito; IA multimodal **não** usada |
+> | Política de risco editável pela administração (versões só-inserção) | `/moderacao/risco` + `RiskPolicyService` | feito |
 
 ## Onde a IA entra (e onde não)
 
@@ -148,11 +149,27 @@ provedor (transferência internacional, LGPD art. 33) — **pendente jurídico**
 |---|---|---|---|---|---|---|---|
 | 2026-10-12 | simulated (regras locais) | aderencia-v1 | 16/16 | 0 | 0 | 2/2 | **Não mede qualidade**: as regras do simulador foram escritas junto com os casos. Só prova que o harness funciona. |
 
-## OCR de foto sem QR Code (decisão pendente)
+## OCR de foto sem QR Code e de PDF escaneado
 
-Hoje: XML (lido), foto com QR (lida), PDF com camada de texto (chave lida),
-foto sem QR e PDF escaneado → o organizador digita a chave. Opções para a
-foto sem QR: Tesseract local (grátis, fraco em cupom térmico) ou IA
-multimodal pelo mesmo `AiService` (melhor, custa por imagem e envia a foto,
-que pode ter dados pessoais, para fora). Recomendação: só ligar depois de
-medir quantas despesas chegam assim.
+Feito com Tesseract local (tesseract.js + dados `por` empacotados; nada vai
+para fora, custo zero). Só dígitos: a chave sai de `findAccessKeys`, que
+exige estrutura válida e dígito verificador, e o organizador confere os 44
+dígitos antes de informar o total (a mensagem diz que veio de OCR). PDF
+escaneado: a primeira página é renderizada (unpdf + @napi-rs/canvas) e passa
+pelo mesmo OCR.
+
+Testado com cupons sintéticos (fonte monoespaçada, JPEG comprimido, PDF só
+com imagem). **Não medido com fotos reais de cupom térmico** — amassado,
+desfocado ou com pouca luz deve falhar mais; nesse caso o fluxo continua
+pedindo a chave digitada. IA multimodal fica como opção futura pelo mesmo
+`AiService`, se as falhas do OCR forem frequentes.
+
+## Política de risco editável
+
+Pesos dos alertas, da consulta fiscal e da IA, sinais de "risco alto direto"
+e os limites médio/alto são editados em `/moderacao/risco` (só `admin`, com
+MFA; a moderação consulta). Cada publicação vira uma versão nova em
+`risk_policies` (só inserção, com motivo e auditoria); as análises gravam o
+nome da versão (`risco-v1` = padrão do código, `politica-N` = publicada).
+Situação fiscal grave (cancelada, não encontrada, divergente) é sempre risco
+alto e não é configurável. Mudar a política não reanalisa o passado.

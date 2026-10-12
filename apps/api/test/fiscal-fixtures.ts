@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { accessKeyCheckDigit } from '@soscomida/shared';
+import sharp from 'sharp';
 import { SignedXml } from 'xml-crypto';
 
 /**
@@ -110,3 +111,61 @@ export function pdfComTexto(linhas: string[]): Buffer {
 
 /** Chave no formato impresso no DANFE: 11 grupos de 4 dígitos. */
 export const chaveImpressa = (k: string) => k.replace(/(\d{4})(?=\d)/g, '$1 ');
+
+/** PDF "escaneado": só uma imagem JPEG na página, sem camada de texto. */
+export function pdfComImagem(jpeg: Buffer, largura: number, altura: number): Buffer {
+  const conteudo = `q ${largura} 0 0 ${altura} 0 0 cm /Im1 Do Q`;
+  const partes: Buffer[] = [];
+  const posicoes: number[] = [];
+  let tamanho = 0;
+  const add = (b: Buffer | string) => {
+    const buf = typeof b === 'string' ? Buffer.from(b, 'latin1') : b;
+    partes.push(buf);
+    tamanho += buf.length;
+  };
+  add('%PDF-1.4\n');
+  const objetos: (string | Buffer[])[] = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${largura} ${altura}] /Resources << /XObject << /Im1 5 0 R >> >> /Contents 4 0 R >>`,
+    `<< /Length ${Buffer.byteLength(conteudo)} >>\nstream\n${conteudo}\nendstream`,
+    [
+      Buffer.from(`<< /Type /XObject /Subtype /Image /Width ${largura} /Height ${altura} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`, 'latin1'),
+      jpeg,
+      Buffer.from('\nendstream', 'latin1'),
+    ],
+  ];
+  objetos.forEach((o, i) => {
+    posicoes.push(tamanho);
+    add(`${i + 1} 0 obj\n`);
+    if (typeof o === 'string') add(o);
+    else o.forEach(add);
+    add('\nendobj\n');
+  });
+  const xref = tamanho;
+  add(`xref\n0 ${objetos.length + 1}\n0000000000 65535 f \n${posicoes.map((p) => `${String(p).padStart(10, '0')} 00000 n \n`).join('')}`);
+  add(`trailer\n<< /Size ${objetos.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+  return Buffer.concat(partes);
+}
+
+/** "Foto" de cupom NFC-e sem QR: texto em fonte monoespaçada, chave em grupos de 4. */
+export async function fotoCupomSemQr(chave: string, opts: { jpeg?: number; largura?: number } = {}): Promise<Buffer> {
+  const linhas = [
+    'SUPERMERCADO EXEMPLO LTDA',
+    'CNPJ 11.222.333/0001-81',
+    'DOCUMENTO AUXILIAR DA NOTA FISCAL DE CONSUMIDOR ELETRONICA',
+    'ARROZ TIPO 1 5KG         1 UN      25,90',
+    'FEIJAO CARIOCA 1KG       1 UN       8,99',
+    'VALOR A PAGAR R$                   34,89',
+    'Consulte pela Chave de Acesso em',
+    'www.fazenda.df.gov.br/nfce',
+    chaveImpressa(chave),
+    'CONSUMIDOR NAO IDENTIFICADO',
+  ];
+  const texto = linhas.map((l, i) => `<text x="30" y="${60 + i * 42}" font-family="Courier New, monospace" font-size="26" fill="#111">${l}</text>`).join('');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="520"><rect width="900" height="520" fill="#f7f4ec"/>${texto}</svg>`;
+  return sharp(Buffer.from(svg))
+    .resize({ width: opts.largura ?? 900 })
+    .jpeg({ quality: opts.jpeg ?? 85 })
+    .toBuffer();
+}

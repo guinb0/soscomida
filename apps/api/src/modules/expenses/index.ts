@@ -7,16 +7,17 @@ import { IdentityModule } from '../identity';
 import { EventHandlerRegistry } from '../outbox';
 import { StorageModule } from '../storage';
 import { ExpenseAnalysisService } from './expense-analysis.service';
-import { OrganizerExpensesController, PublicExpensesController, ReviewExpensesController } from './expenses.controller';
+import { OrganizerExpensesController, PublicExpensesController, ReviewExpensesController, RiskPolicyController } from './expenses.controller';
 import { EXPENSE_EVENTS, ExpensesService } from './expenses.service';
+import { RiskPolicyService } from './risk-policy.service';
 
 export { ExpensesService, EXPENSE_EVENTS } from './expenses.service';
 export { ExpenseAnalysisService } from './expense-analysis.service';
 
 @Module({
   imports: [AiModule, AuditModule, CampaignsModule, FiscalModule, IdentityModule, StorageModule],
-  controllers: [OrganizerExpensesController, ReviewExpensesController, PublicExpensesController],
-  providers: [ExpensesService, ExpenseAnalysisService],
+  controllers: [OrganizerExpensesController, ReviewExpensesController, PublicExpensesController, RiskPolicyController],
+  providers: [ExpensesService, ExpenseAnalysisService, RiskPolicyService],
   exports: [ExpensesService, ExpenseAnalysisService],
 })
 export class ExpensesModule implements OnModuleInit {

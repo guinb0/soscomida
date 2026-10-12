@@ -7,9 +7,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/infra/config/config';
 import { AiService } from '../src/modules/ai';
 import type { LlmProvider } from '../src/modules/ai/domain/llm';
-import { adherenceOutputSchema } from '@soscomida/contracts';
+import { type RiskPolicy, adherenceOutputSchema } from '@soscomida/contracts';
+import { DEFAULT_RISK_RULES } from '../src/modules/expenses/domain/risk';
 import { type TestApp, agent, createTestApp, userWithRole } from './app';
-import { accessKey, assinarNfe, chaveImpressa, nfeXml, pdfComTexto } from './fiscal-fixtures';
+import { accessKey, assinarNfe, chaveImpressa, fotoCupomSemQr, nfeXml, pdfComTexto } from './fiscal-fixtures';
 import { activeCampaign, drainOutbox } from './fixtures';
 import { TEST_ENV } from './env';
 
@@ -79,7 +80,7 @@ describe('assinatura do XML e leitura do PDF', () => {
 
     await drainOutbox(t.app);
     const revisao = (await moderador.http.get(`/api/moderation/expenses/${e.id}`).expect(200)).body as ModerationExpense;
-    expect(revisao.analysis).toMatchObject({ trigger: 'SUBMITTED', rulesetVersion: 'risco-v1', risk: { level: 'HIGH' } });
+    expect(revisao.analysis).toMatchObject({ trigger: 'SUBMITTED', rulesetVersion: expect.stringMatching(/^(risco-v1|politica-\d+)$/), risk: { level: 'HIGH' } });
     expect(revisao.analysis!.risk.factors.map((f) => f.code)).toContain('XML_SIGNATURE_INVALID');
   });
 
@@ -95,7 +96,14 @@ describe('assinatura do XML e leitura do PDF', () => {
       .body as OwnedExpense;
     expect(ok.documents[0]).toMatchObject({ allocatedCents: 5_000, extraction: { status: 'EXTRACTED' } });
 
-    // PDF sem texto (escaneado) continua pedindo a chave.
+    // Foto do cupom sem QR Code: a chave sai do OCR, para o organizador conferir.
+    const k2 = accessKey();
+    const e3 = await novaDespesa(organizador.http, campaign.id);
+    const d3 = await anexar(organizador.http, e3.id, await fotoCupomSemQr(k2), 'image/jpeg', 'FISCAL');
+    expect(d3.documents[0]).toMatchObject({ extraction: { status: 'NEEDS_TOTAL' }, fiscalDocument: { accessKey: k2 } });
+    expect(d3.documents[0]!.extraction.message).toContain('OCR');
+
+    // PDF ilegível continua pedindo a chave.
     const e2 = await novaDespesa(organizador.http, campaign.id);
     const d2 = await anexar(organizador.http, e2.id, pdfSemTexto(), 'application/pdf', 'FISCAL');
     expect(d2.documents[0]!.extraction).toMatchObject({ status: 'NEEDS_ACCESS_KEY' });
@@ -268,5 +276,40 @@ describe('IA: orçamento, saída inválida e provedor fora do ar', () => {
   it('sem provedor → NO_PROVIDER, e a despesa ainda recebe a pontuação das regras', async () => {
     const ai = new AiService(t.db, null, config);
     expect(await ai.analyze(pedido())).toMatchObject({ ok: false, reason: 'NO_PROVIDER', attempts: 0 });
+  });
+});
+
+describe('política de risco editável', () => {
+  it('moderação consulta; só administração publica; nova versão muda a pontuação das próximas análises', async () => {
+    const { campaign, organizador, moderador } = await activeCampaign(t.app);
+    const admin = await userWithRole(t.app, 'admin', 'Administradora');
+    const { current } = (await moderador.http.get('/api/moderation/risk-policy').expect(200)).body as { current: RiskPolicy };
+
+    const mais = { ...current.rules, flagPoints: { ...current.rules.flagPoints, NO_PAYMENT_PROOF: 40 } };
+    await moderador.http.post('/api/moderation/risk-policy').send({ rules: mais, basedOnVersion: current.version, reason: 'Tentativa sem permissão.' }).expect(403);
+    await admin.http
+      .post('/api/moderation/risk-policy')
+      .send({ rules: { ...mais, mediumFrom: 60, highFrom: 50 }, basedOnVersion: current.version, reason: 'Limites invertidos.' })
+      .expect(400);
+    const nova = (await admin.http
+      .post('/api/moderation/risk-policy')
+      .send({ rules: mais, basedOnVersion: current.version, reason: 'Sem comprovante de pagamento pesa mais nesta fase.' })
+      .expect(200)).body as RiskPolicy;
+    expect(nova).toMatchObject({ version: current.version + 1, label: `politica-${current.version + 1}` });
+    // Edição baseada em versão velha: conflito.
+    await admin.http.post('/api/moderation/risk-policy').send({ rules: mais, basedOnVersion: current.version, reason: 'Edição desatualizada.' }).expect(409);
+
+    const e = await novaDespesa(organizador.http, campaign.id, { amountCents: 1_000 });
+    const { xml } = nfeXml({ items: [{ description: 'ARROZ', totalCents: 1_000 }] });
+    await anexar(organizador.http, e.id, Buffer.from(assinarNfe(xml)), 'application/xml', 'FISCAL');
+    await enviar(organizador.http, e.id);
+    await drainOutbox(t.app);
+    const r = (await moderador.http.get(`/api/moderation/expenses/${e.id}`).expect(200)).body as ModerationExpense;
+    expect(r.analysis!.rulesetVersion).toBe(nova.label);
+    expect(r.analysis!.risk.factors.find((f) => f.code === 'NO_PAYMENT_PROOF')?.points).toBe(40);
+
+    await expect(t.db.execute(sql`update risk_policies set reason = 'x'`)).rejects.toThrow();
+    // Devolve a política padrão para não afetar outros testes.
+    await admin.http.post('/api/moderation/risk-policy').send({ rules: DEFAULT_RISK_RULES, basedOnVersion: nova.version, reason: 'Volta aos pesos padrão.' }).expect(200);
   });
 });

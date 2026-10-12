@@ -55,6 +55,11 @@ const envSchema = z
      * "não verificável", revisão humana). dev = simulado, só desenvolvimento.
      */
     FISCAL_VERIFICATION_PROVIDER: z.enum(['none', 'dev']).default('none'),
+    /**
+     * Arquivos PEM com ACs extras aceitas como raiz na assinatura do XML, além
+     * da ICP-Brasil. Só desenvolvimento/testes (certificados fictícios).
+     */
+    FISCAL_EXTRA_TRUST_ANCHORS: csv.default([]),
 
     /**
      * IA (análise de aderência das despesas). none = sem IA (só regras
@@ -102,6 +107,9 @@ const envSchema = z
     }
     if (env.NODE_ENV !== 'development' && env.NODE_ENV !== 'test' && env.FISCAL_VERIFICATION_PROVIDER === 'dev') {
       ctx.addIssue({ code: 'custom', path: ['FISCAL_VERIFICATION_PROVIDER'], message: 'O provedor fiscal simulado é proibido fora de development/test.' });
+    }
+    if (env.NODE_ENV !== 'development' && env.NODE_ENV !== 'test' && env.FISCAL_EXTRA_TRUST_ANCHORS.length > 0) {
+      ctx.addIssue({ code: 'custom', path: ['FISCAL_EXTRA_TRUST_ANCHORS'], message: 'Âncoras de confiança extras são proibidas fora de development/test: só a ICP-Brasil vale.' });
     }
     if (env.NODE_ENV !== 'development' && env.NODE_ENV !== 'test' && env.AI_PROVIDER === 'simulated') {
       ctx.addIssue({ code: 'custom', path: ['AI_PROVIDER'], message: 'A IA simulada (regras locais) é proibida fora de development/test.' });

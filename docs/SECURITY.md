@@ -101,7 +101,14 @@ Assinatura do XML: verificada com xml-crypto (`publicCert` vindo do próprio
 XML, nunca `getCertFromKeyInfo` padrão), só a assinatura filha de `NFe`,
 `Id` único no documento, e os dados usados para conferir vêm de
 `getSignedReferences()` (trecho autenticado), não do XML inteiro. O titular
-do certificado não vai a público (pode ser e-CPF).
+do certificado não vai a público (pode ser e-CPF). A cadeia é validada contra o
+pacote de ACs ICP-Brasil versionado no repositório (origem e SHA-256 em
+`apps/api/assets/icp-brasil/LEIAME.md`); âncoras extras
+(`FISCAL_EXTRA_TRUST_ANCHORS`) só em dev/test — a configuração recusa em
+produção. Revogação não é consultada (pendente).
+
+OCR: Tesseract roda localmente, sem rede, com limite de tempo (20 s) e de
+pixels; PDF renderizado só na primeira página.
 
 ## Modelo de ameaças (resumo)
 

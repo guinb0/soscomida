@@ -7,12 +7,12 @@
 > | XML de NF-e/NFC-e (`modules/fiscal/domain/nfe-xml.ts`) | feito: chave, emitente, itens, total, protocolo declarado, coerência campos × chave, XXE bloqueado |
 > | QR Code de NFC-e na foto (`infra/qr-reader.ts` + `parseNfceQrCode` em `@soscomida/shared`) | feito: v1 (parâmetros nomeados), v2 online/offline; v3 só chave e ambiente (posição dos demais campos não confirmada) |
 > | PDF com camada de texto (DANFE do emissor) | Fase 3: chave lida do texto (`infra/pdf-text.ts`, unpdf), validada pelo DV; o total é informado pelo organizador |
-> | PDF escaneado / foto sem QR | organizador digita a chave e o total (marcado como "total declarado") |
+> | PDF escaneado / foto sem QR | OCR local (Tesseract) procura a chave; se achar, o organizador confere e informa o total; se não, digita a chave |
 > | OCR e IA multimodal | **não feito** (Fase 3) |
 > | Antiduplicidade | chave única + SHA-256 do arquivo + hash perceptual (dHash 64 bits, distância ≤ 6) de imagens — Fase 3 |
 > | Rateio com limite | feito (lock + constraint trigger) |
 > | `FiscalVerificationProvider` | interface + `none` (padrão: UNVERIFIABLE/NO_INTEGRATION) + `dev` (simulado, proibido fora de dev/test). **Nenhuma consulta oficial real**: depende de certificado ICP-Brasil |
-> | Assinatura digital do XML (XMLDSig) | Fase 3: verificada (`domain/xml-signature.ts`, xml-crypto). Detecta XML editado depois de assinado e ataque de embrulho; confere o trecho assinado com o lido; CNPJ do certificado × emitente, validade na emissão e autoassinatura. **A cadeia ICP-Brasil não é validada** (falta o repositório das ACs): assinatura íntegra ≠ nota autêntica |
+> | Assinatura digital do XML (XMLDSig) | Fase 3: verificada (`domain/xml-signature.ts`, xml-crypto). Detecta XML editado depois de assinado e ataque de embrulho; confere o trecho assinado com o lido; CNPJ do certificado × emitente, validade na emissão e autoassinatura. **Cadeia ICP-Brasil validada** até as raízes v5/v6/v10/v11/v12 (pacote oficial do ITI em `apps/api/assets/icp-brasil`; v7 fora por algoritmo não suportado), com validade de cada AC na data de emissão. **Revogação (LCR) não é consultada.** Assinatura íntegra e ICP-Brasil prova quem assinou, não que a nota está autorizada no fisco |
 > | Revisão humana e selos públicos | feito |
 
 ## O que a plataforma afirma — e o que não afirma

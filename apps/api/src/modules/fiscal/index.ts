@@ -10,6 +10,8 @@ import { StorageModule } from '../storage';
 import { FISCAL_VERIFICATION_PROVIDERS, type FiscalVerificationProvider } from './domain/verification';
 import { FISCAL_EVENTS, FiscalService } from './fiscal.service';
 import { DevFiscalVerificationProvider, NoIntegrationFiscalProvider } from './infra/providers';
+import { RECEIPT_OCR, ReceiptOcr } from './infra/receipt-ocr';
+import { FISCAL_TRUST_STORE, loadTrustStore } from './infra/trust-store';
 
 export { FiscalService, FISCAL_EVENTS, type Extraction, type FiscalDocumentView } from './fiscal.service';
 export type { FiscalVerificationProvider, FiscalVerificationResult, FiscalDocumentRef } from './domain/verification';
@@ -44,7 +46,12 @@ class DevFiscalController {
 @Module({
   imports: [StorageModule],
   controllers: [DevFiscalController],
-  providers: [FiscalService, { provide: FISCAL_VERIFICATION_PROVIDERS, inject: [APP_CONFIG], useFactory: createProviders }],
+  providers: [
+    FiscalService,
+    { provide: FISCAL_VERIFICATION_PROVIDERS, inject: [APP_CONFIG], useFactory: createProviders },
+    { provide: FISCAL_TRUST_STORE, inject: [APP_CONFIG], useFactory: (c: AppConfig) => loadTrustStore(c.FISCAL_EXTRA_TRUST_ANCHORS) },
+    { provide: RECEIPT_OCR, useFactory: () => new ReceiptOcr() },
+  ],
   exports: [FiscalService],
 })
 export class FiscalModule implements OnModuleInit, OnModuleDestroy {
@@ -52,6 +59,7 @@ export class FiscalModule implements OnModuleInit, OnModuleDestroy {
     private readonly fiscal: FiscalService,
     private readonly events: EventHandlerRegistry,
     @Inject(FISCAL_VERIFICATION_PROVIDERS) private readonly providers: FiscalVerificationProvider[],
+    @Inject(RECEIPT_OCR) private readonly ocr: ReceiptOcr,
   ) {}
 
   onModuleInit(): void {
@@ -60,7 +68,8 @@ export class FiscalModule implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  onModuleDestroy(): void {
+  async onModuleDestroy(): Promise<void> {
     for (const p of this.providers) if (p instanceof DevFiscalVerificationProvider) p.close();
+    await this.ocr.close();
   }
 }

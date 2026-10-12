@@ -19,6 +19,8 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /out ./
 COPY --from=build /repo/apps/api/drizzle ./drizzle
+# Cadeia ICP-Brasil para validar o certificado da assinatura das notas.
+COPY --from=build /repo/apps/api/assets ./assets
 USER node
 EXPOSE 4000
 HEALTHCHECK --interval=15s --timeout=3s --retries=5 CMD wget -q -O /dev/null http://127.0.0.1:4000/api/health/live || exit 1

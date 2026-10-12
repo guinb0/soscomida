@@ -1,4 +1,4 @@
-import { AI_STATUSES, ASSESSMENTS, type AdherenceOutput, EXPENSE_DOCUMENT_KINDS, EXPENSE_STATUSES, type ExpenseFlag } from '@soscomida/contracts';
+import { AI_STATUSES, ASSESSMENTS, type AdherenceOutput, EXPENSE_DOCUMENT_KINDS, EXPENSE_STATUSES, type ExpenseFlag, type RiskPolicyRules } from '@soscomida/contracts';
 import { sql } from 'drizzle-orm';
 import { bigint, check, date, index, integer, jsonb, pgTable, smallint, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { campaigns } from '../../campaigns/infra/campaigns.schema';
@@ -157,4 +157,24 @@ export const expenseAnalyses = pgTable(
     check('expense_analyses_level_check', sql`${t.riskLevel} in ('LOW', 'MEDIUM', 'HIGH')`),
     check('expense_analyses_ai_status_check', sql`${t.aiStatus} in (${lista(AI_STATUSES)})`),
   ],
+);
+
+/**
+ * Versões da política de risco publicadas pela administração. Só inserção:
+ * a vigente é a de maior versão; sem nenhuma, vale a padrão do código
+ * (risco-v1, versão 0).
+ */
+export const riskPolicies = pgTable(
+  'risk_policies',
+  {
+    id: uuid('id').primaryKey(),
+    version: integer('version').notNull(),
+    rules: jsonb('rules').$type<RiskPolicyRules>().notNull(),
+    reason: text('reason').notNull(),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('risk_policies_version').on(t.version), check('risk_policies_version_positive', sql`${t.version} > 0`)],
 );
