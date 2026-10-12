@@ -105,7 +105,9 @@ do certificado não vai a público (pode ser e-CPF). A cadeia é validada contra
 pacote de ACs ICP-Brasil versionado no repositório (origem e SHA-256 em
 `apps/api/assets/icp-brasil/LEIAME.md`); âncoras extras
 (`FISCAL_EXTRA_TRUST_ANCHORS`) só em dev/test — a configuração recusa em
-produção. Revogação não é consultada (pendente).
+produção. Revogação pela LCR: só depois de a cadeia fechar na ICP-Brasil (a URL
+vem de um certificado assinado por AC confiável), timeout de 8 s, até 40 MB,
+assinatura da LCR conferida com a chave da AC.
 
 OCR: Tesseract roda localmente, sem rede, com limite de tempo (20 s) e de
 pixels; PDF renderizado só na primeira página.

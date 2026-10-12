@@ -25,10 +25,17 @@ S3           (externo: Cloudflare R2 ou Backblaze B2; SeaweedFS só em dev)
 ## Deploy
 
 CI (GitHub Actions) roda lint, tipagem, testes, build e o e2e (Playwright) em
-todo push, com a mesma infraestrutura do `pnpm dev:infra`. **Ainda não existe**
-o workflow de release (montar e publicar imagens em tag `v*`); até lá:
+todo push, com a mesma infraestrutura do `pnpm dev:infra`.
+
+Release (`.github/workflows/release.yml`): ao enviar uma tag `vX.Y.Z` (ou rodar
+à mão), roda o CI inteiro e publica `ghcr.io/<dono>/soscomida-api` e
+`ghcr.io/<dono>/soscomida-web` com as tags `X.Y.Z` e `sha-<commit>`. Não faz
+deploy. Em repositório privado, os pacotes do GHCR também são privados: o
+servidor precisa de `docker login ghcr.io` com um token de leitura de pacotes.
 
 ```bash
+git tag v0.1.0 && git push origin v0.1.0   # publica as imagens
+# sem CI, à mão:
 docker build -f infra/docker/api.Dockerfile -t $REGISTRY/soscomida-api:$TAG .
 docker build -f infra/docker/web.Dockerfile -t $REGISTRY/soscomida-web:$TAG .
 ```

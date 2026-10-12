@@ -14,4 +14,4 @@ validar a cadeia do certificado que assina o XML das notas
 Atualizar (o ITI publica ACs novas e as antigas vencem): baixar o zip,
 extrair numa pasta própria e rodar
 `node scripts/montar-acs-icp-brasil.mjs <pasta> assets/icp-brasil/acs-icp-brasil.pem`.
-A revogação (LCR) não é consultada.
+A revogação é conferida pela LCR de cada AC (src/modules/fiscal/infra/revocation.ts).

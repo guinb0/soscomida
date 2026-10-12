@@ -4,14 +4,16 @@ import { X509Certificate } from 'node:crypto';
  * Repositório de confiança: raízes (autoassinadas) e ACs intermediárias. Em
  * produção, só a ICP-Brasil (assets/icp-brasil). A cadeia é montada a partir
  * do certificado do XML, conferindo assinatura e validade de cada elo na data
- * de emissão da nota (modelo de cadeia da ICP-Brasil). Revogação (LCR) não é
- * consultada.
+ * de emissão da nota (modelo de cadeia da ICP-Brasil). A revogação é
+ * conferida à parte, pela LCR (infra/revocation.ts).
  */
 export interface ChainResult {
   trusted: boolean;
   /** Nomes (CN) do certificado até a raiz, na ordem. */
   chain: string[];
   problem: string | null;
+  /** AC que emitiu o certificado (para conferir a LCR). */
+  issuer: X509Certificate | null;
 }
 
 const MAX_PROFUNDIDADE = 8;
@@ -55,19 +57,21 @@ export class TrustStore {
   chainFor(folha: X509Certificate, emitidaEm: Date | null): ChainResult {
     const cadeia = [cn(folha)];
     let atual = folha;
+    let emissorDireto: X509Certificate | null = null;
     for (let n = 0; n < MAX_PROFUNDIDADE; n++) {
-      if (this.raizes.has(atual.fingerprint256)) return { trusted: true, chain: cadeia, problem: null };
+      if (this.raizes.has(atual.fingerprint256)) return { trusted: true, chain: cadeia, problem: null, issuer: emissorDireto };
       if (atual.subject === atual.issuer && assinadoPor(atual, atual)) {
-        return { trusted: false, chain: cadeia, problem: 'Certificado autoassinado fora da ICP-Brasil' };
+        return { trusted: false, chain: cadeia, problem: 'Certificado autoassinado fora da ICP-Brasil', issuer: null };
       }
       const emissor = this.certs.find((c) => assinadoPor(atual, c));
-      if (!emissor) return { trusted: false, chain: cadeia, problem: 'Certificado não emitido por AC da ICP-Brasil' };
+      if (!emissor) return { trusted: false, chain: cadeia, problem: 'Certificado não emitido por AC da ICP-Brasil', issuer: null };
       if (emitidaEm && !valido(emissor, emitidaEm)) {
-        return { trusted: false, chain: [...cadeia, cn(emissor)], problem: `AC ${cn(emissor)} fora da validade na data de emissão` };
+        return { trusted: false, chain: [...cadeia, cn(emissor)], problem: `AC ${cn(emissor)} fora da validade na data de emissão`, issuer: null };
       }
       cadeia.push(cn(emissor));
+      emissorDireto ??= emissor;
       atual = emissor;
     }
-    return { trusted: false, chain: cadeia, problem: 'Cadeia de certificação longa demais' };
+    return { trusted: false, chain: cadeia, problem: 'Cadeia de certificação longa demais', issuer: null };
   }
 }

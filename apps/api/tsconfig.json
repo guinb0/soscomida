@@ -11,5 +11,5 @@
     "strictPropertyInitialization": false,
     "isolatedModules": false
   },
-  "include": ["src", "test", "eslint", "vitest.config.mts", "drizzle.config.ts"]
+  "include": ["src", "test", "scripts", "eslint", "vitest.config.mts", "drizzle.config.ts"]
 }

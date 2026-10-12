@@ -11,6 +11,7 @@ import { FISCAL_VERIFICATION_PROVIDERS, type FiscalVerificationProvider } from '
 import { FISCAL_EVENTS, FiscalService } from './fiscal.service';
 import { DevFiscalVerificationProvider, NoIntegrationFiscalProvider } from './infra/providers';
 import { RECEIPT_OCR, ReceiptOcr } from './infra/receipt-ocr';
+import { REVOCATION_CHECKER, RevocationChecker } from './infra/revocation';
 import { FISCAL_TRUST_STORE, loadTrustStore } from './infra/trust-store';
 
 export { FiscalService, FISCAL_EVENTS, type Extraction, type FiscalDocumentView } from './fiscal.service';
@@ -51,6 +52,7 @@ class DevFiscalController {
     { provide: FISCAL_VERIFICATION_PROVIDERS, inject: [APP_CONFIG], useFactory: createProviders },
     { provide: FISCAL_TRUST_STORE, inject: [APP_CONFIG], useFactory: (c: AppConfig) => loadTrustStore(c.FISCAL_EXTRA_TRUST_ANCHORS) },
     { provide: RECEIPT_OCR, useFactory: () => new ReceiptOcr() },
+    { provide: REVOCATION_CHECKER, useFactory: () => new RevocationChecker() },
   ],
   exports: [FiscalService],
 })

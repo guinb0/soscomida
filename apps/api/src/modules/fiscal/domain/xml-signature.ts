@@ -33,10 +33,14 @@ export interface SignatureCertificate {
   icpBrasil: boolean;
   chain: string[];
   chainProblem: string | null;
+  /** Consulta à LCR da AC (feita depois, no serviço; ver infra/revocation.ts). */
+  revocation?: 'GOOD' | 'REVOKED' | 'UNKNOWN' | 'NOT_CHECKED';
+  revocationDetail?: string | null;
 }
 
 export type SignatureCheck =
-  | { status: 'VALID'; certificate: SignatureCertificate }
+  /** `x509`: certificados para conferir a revogação; não são gravados. */
+  | { status: 'VALID'; certificate: SignatureCertificate; x509: { leaf: X509Certificate; issuer: X509Certificate | null } }
   | { status: 'MISSING' }
   | { status: 'INVALID'; reason: SignatureFailure; detail?: string };
 
@@ -73,7 +77,7 @@ const elementos = (raiz: Element | Document, nome: string): Element[] => {
   return r;
 };
 
-function lerCertificado(base64: string, emitente: string, emitidaEm: string | null, confianca: TrustStore): SignatureCertificate {
+function lerCertificado(base64: string, emitente: string, emitidaEm: string | null, confianca: TrustStore): { certificate: SignatureCertificate; leaf: X509Certificate; issuer: X509Certificate | null } {
   const der = Buffer.from(base64.replace(/\s+/g, ''), 'base64');
   const c = new X509Certificate(der);
   const cn = /(?:^|\n)CN=([^\n]+)/.exec(c.subject)?.[1] ?? '';
@@ -83,7 +87,7 @@ function lerCertificado(base64: string, emitente: string, emitidaEm: string | nu
   const emissao = emitidaEm ? new Date(emitidaEm) : null;
   const dataValida = emissao && !Number.isNaN(emissao.getTime()) ? emissao : null;
   const cadeia = confianca.chainFor(c, dataValida);
-  return {
+  const certificate: SignatureCertificate = {
     subject: c.subject.replace(/\n/g, ', '),
     issuer: c.issuer.replace(/\n/g, ', '),
     cnpj,
@@ -96,6 +100,7 @@ function lerCertificado(base64: string, emitente: string, emitidaEm: string | nu
     chain: cadeia.chain,
     chainProblem: cadeia.problem,
   };
+  return { certificate, leaf: c, issuer: cadeia.issuer };
 }
 
 export function certificateProblems(c: SignatureCertificate): string[] {
@@ -104,6 +109,7 @@ export function certificateProblems(c: SignatureCertificate): string[] {
   if (c.validAtIssue === false) p.push('Certificado fora da validade na data de emissão');
   if (c.selfSigned) p.push('Certificado autoassinado');
   else if (!c.icpBrasil) p.push(c.chainProblem ?? 'Certificado fora da cadeia ICP-Brasil');
+  if (c.revocation === 'REVOKED') p.push(`Certificado revogado antes da emissão da nota${c.revocationDetail ? ` (${c.revocationDetail})` : ''}`);
   return p;
 }
 
@@ -154,10 +160,10 @@ export function verifyNfeSignature(xml: string, confianca: TrustStore): Signatur
   const certNo = elementos(assinatura, 'X509Certificate')[0];
   const base64 = certNo?.textContent?.trim();
   if (!base64) return { status: 'INVALID', reason: 'NO_CERTIFICATE' };
-  let certificado: SignatureCertificate;
+  let doXml: ReturnType<typeof lerCertificado>;
   let pem: string;
   try {
-    certificado = lerCertificado(base64, nota.issuer.document, nota.issuedAt, confianca);
+    doXml = lerCertificado(base64, nota.issuer.document, nota.issuedAt, confianca);
     pem = `-----BEGIN CERTIFICATE-----\n${base64.replace(/\s+/g, '').replace(/.{64}/g, '$&\n')}\n-----END CERTIFICATE-----\n`;
   } catch {
     return { status: 'INVALID', reason: 'BAD_CERTIFICATE' };
@@ -187,5 +193,5 @@ export function verifyNfeSignature(xml: string, confianca: TrustStore): Signatur
     t.items.every((i, n) => i.totalCents === nota.items[n]!.totalCents && i.description === nota.items[n]!.description);
   if (!mesmo) return { status: 'INVALID', reason: 'SIGNED_CONTENT_DIFFERS' };
 
-  return { status: 'VALID', certificate: certificado };
+  return { status: 'VALID', certificate: doXml.certificate, x509: { leaf: doXml.leaf, issuer: doXml.issuer } };
 }

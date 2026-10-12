@@ -13,6 +13,7 @@ import { fiscalDocumentItems, fiscalDocuments, fiscalVerifications } from './inf
 import type { TrustStore } from './domain/icp-chain';
 import { findAccessKeys, pdfFirstPageImage, pdfText } from './infra/pdf-text';
 import { RECEIPT_OCR, type ReceiptOcr } from './infra/receipt-ocr';
+import { REVOCATION_CHECKER, type RevocationChecker } from './infra/revocation';
 import { FISCAL_TRUST_STORE } from './infra/trust-store';
 import { readQrCode } from './infra/qr-reader';
 
@@ -80,6 +81,7 @@ export class FiscalService {
     @Inject(FISCAL_VERIFICATION_PROVIDERS) private readonly providers: FiscalVerificationProvider[],
     @Inject(FISCAL_TRUST_STORE) private readonly trust: TrustStore,
     @Inject(RECEIPT_OCR) private readonly ocr: ReceiptOcr,
+    @Inject(REVOCATION_CHECKER) private readonly revocation: RevocationChecker,
     private readonly storage: StorageService,
     private readonly outbox: OutboxService,
   ) {}
@@ -93,7 +95,14 @@ export class FiscalService {
     if (info.mimeType === 'application/xml') {
       const r = parseNfeXml(conteudo);
       if (!r.ok) throw new DomainError(`FISCAL_${r.error}`, XML_ERRORS[r.error] ?? 'XML não reconhecido');
-      return { kind: 'NFE_XML', parsed: r.value, signature: verifyNfeSignature(conteudo.toString('utf8'), this.trust) };
+      const assinatura = verifyNfeSignature(conteudo.toString('utf8'), this.trust);
+      if (assinatura.status === 'VALID' && assinatura.certificate.icpBrasil && assinatura.x509.issuer) {
+        const emitidaEm = r.value.issuedAt ? new Date(r.value.issuedAt) : null;
+        const lcr = await this.revocation.check(assinatura.x509.leaf, assinatura.x509.issuer, emitidaEm && !Number.isNaN(emitidaEm.getTime()) ? emitidaEm : null);
+        assinatura.certificate.revocation = lcr.status;
+        assinatura.certificate.revocationDetail = lcr.detail;
+      }
+      return { kind: 'NFE_XML', parsed: r.value, signature: assinatura };
     }
     if (info.mimeType.startsWith('image/')) {
       const texto = await readQrCode(conteudo);
