@@ -1,6 +1,6 @@
 import type { Assessment, ExpenseFlag, ExpenseStatus, FiscalCheck } from '@soscomida/contracts';
 
-export type ExpenseAction = 'submit' | 'withdraw' | 'cancel' | 'claim' | 'approve' | 'request_changes' | 'reject';
+export type ExpenseAction = 'submit' | 'withdraw' | 'cancel' | 'claim' | 'approve' | 'request_changes' | 'reject' | 'appeal';
 export type ExpenseActor = 'organizer' | 'reviewer';
 
 const TRANSICOES: Record<ExpenseAction, { from: ExpenseStatus[]; to: ExpenseStatus; actor: ExpenseActor; reason: boolean }> = {
@@ -11,6 +11,8 @@ const TRANSICOES: Record<ExpenseAction, { from: ExpenseStatus[]; to: ExpenseStat
   approve: { from: ['IN_REVIEW'], to: 'APPROVED', actor: 'reviewer', reason: true },
   request_changes: { from: ['IN_REVIEW'], to: 'DRAFT', actor: 'reviewer', reason: true },
   reject: { from: ['IN_REVIEW'], to: 'REJECTED', actor: 'reviewer', reason: true },
+  // Contestação: a recusa volta para a fila e outra pessoa revisa (uma vez só; ver ExpensesService.appeal).
+  appeal: { from: ['REJECTED'], to: 'SUBMITTED', actor: 'organizer', reason: true },
 };
 
 export type ExpenseTransition = { ok: true; to: ExpenseStatus } | { ok: false; error: 'INVALID_TRANSITION' | 'ACTOR_NOT_ALLOWED' | 'REASON_REQUIRED' };
@@ -65,9 +67,17 @@ export interface FlagInput {
     warnings: string[];
     totalFromDocument: boolean;
     sharedWithOtherExpenses: boolean;
+    /** Assinatura do XML (null quando a nota não veio de XML). */
+    signatureStatus: 'VALID' | 'MISSING' | 'INVALID' | null;
+    /** Problemas do certificado de uma assinatura íntegra (CNPJ, validade, autoassinado). */
+    certificateProblems: number;
   }[];
   hasPaymentProof: boolean;
   duplicateFile: boolean;
+  /** Imagem visualmente igual (hash perceptual) a uma usada em outra despesa. */
+  similarImage: boolean;
+  /** Pré-filtro achou ordens ao sistema nos textos enviados. */
+  suspiciousInstructions: boolean;
 }
 
 /** Dias de tolerância depois do prazo: compras feitas após o encerramento ainda valem. */
@@ -91,6 +101,8 @@ export function computeFlags(i: FlagInput): ExpenseFlag[] {
   if (foraDoPeriodo(i.spentOn)) flags.add('DATE_OUTSIDE_CAMPAIGN');
   if (i.category.committedCents > i.category.plannedCents) flags.add('OVER_BUDGET_CATEGORY');
   if (i.duplicateFile) flags.add('DUPLICATE_FILE');
+  if (i.similarImage) flags.add('SIMILAR_IMAGE');
+  if (i.suspiciousInstructions) flags.add('SUSPICIOUS_INSTRUCTIONS');
   if (!i.hasPaymentProof) flags.add('NO_PAYMENT_PROOF');
 
   for (const f of i.fiscal) {
@@ -101,6 +113,9 @@ export function computeFlags(i: FlagInput): ExpenseFlag[] {
     if (f.warnings.length > 0) flags.add('FISCAL_WARNINGS');
     if (!f.totalFromDocument) flags.add('FISCAL_TOTAL_DECLARED');
     if (f.sharedWithOtherExpenses) flags.add('SHARED_FISCAL_DOCUMENT');
+    if (f.source === 'XML' && f.signatureStatus === 'MISSING') flags.add('XML_SIGNATURE_MISSING');
+    if (f.source === 'XML' && f.signatureStatus === 'INVALID') flags.add('XML_SIGNATURE_INVALID');
+    if (f.source === 'XML' && f.signatureStatus === 'VALID' && f.certificateProblems > 0) flags.add('XML_SIGNATURE_CERTIFICATE');
   }
   return [...flags];
 }

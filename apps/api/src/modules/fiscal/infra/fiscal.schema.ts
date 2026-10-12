@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { bigint, check, index, integer, jsonb, pgTable, smallint, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { users } from '../../identity/infra/identity.schema';
+import type { SignatureDetails } from '../domain/xml-signature';
 import { storedFiles } from '../../storage/infra/storage.schema';
 
 /**
@@ -34,6 +35,10 @@ export const fiscalDocuments = pgTable(
     protocolNumber: text('protocol_number'),
     protocolMessage: text('protocol_message'),
     warnings: jsonb('warnings').$type<string[]>().notNull().default([]),
+    /** Assinatura XMLDSig do emitente (só para XML): VALID, MISSING ou INVALID. */
+    signatureStatus: text('signature_status'),
+    /** Certificado e problemas encontrados; ver fiscal/domain/xml-signature.ts. */
+    signatureDetails: jsonb('signature_details').$type<SignatureDetails>(),
     /** Projeção da última tentativa em fiscal_verifications. */
     verificationStatus: text('verification_status').notNull().default('NOT_VERIFIED'),
     verificationReason: text('verification_reason'),
@@ -50,6 +55,7 @@ export const fiscalDocuments = pgTable(
     check('fiscal_documents_key_format', sql`${t.accessKey} ~ '^[0-9]{44}$'`),
     check('fiscal_documents_model_check', sql`${t.model} in ('NFE_55', 'NFCE_65')`),
     check('fiscal_documents_source_check', sql`${t.source} in ('XML', 'QR_CODE', 'ACCESS_KEY')`),
+    check('fiscal_documents_signature_check', sql`${t.signatureStatus} is null or ${t.signatureStatus} in ('VALID', 'MISSING', 'INVALID')`),
     check('fiscal_documents_total_check', sql`${t.totalCents} is null or ${t.totalCents} >= 0`),
     check('fiscal_documents_declared_check', sql`${t.declaredTotalCents} is null or ${t.declaredTotalCents} > 0`),
     check(

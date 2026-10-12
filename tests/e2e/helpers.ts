@@ -82,3 +82,33 @@ export function nfceXml(itens: { descricao: string; centavos: number }[]): { xml
   const xml = `<?xml version="1.0" encoding="UTF-8"?><nfeProc versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe"><NFe><infNFe Id="NFe${chave}" versao="4.00"><ide><cUF>53</cUF><mod>65</mod><serie>1</serie><nNF>${Number(numero)}</nNF><dhEmi>${hoje}T10:00:00-03:00</dhEmi><tpAmb>1</tpAmb></ide><emit><CNPJ>11222333000181</CNPJ><xNome>SUPERMERCADO EXEMPLO LTDA</xNome></emit>${det}<total><ICMSTot><vProd>${dec(total)}</vProd><vNF>${dec(total)}</vNF></ICMSTot></total></infNFe></NFe><protNFe><infProt><chNFe>${chave}</chNFe><cStat>100</cStat><nProt>1</nProt></infProt></protNFe></nfeProc>`;
   return { xml, chave };
 }
+
+/** Envia um arquivo como o navegador faria (URL pré-assinada) e anexa à despesa. */
+export async function anexarViaApi(ctx: BrowserContext, despesaId: string, conteudo: Buffer, contentType: string, kind: string) {
+  const a = apiDo(ctx);
+  const ticket = await a.post<{ fileId: string; uploadUrl: string; headers: Record<string, string> }>(`/me/expenses/${despesaId}/documents/upload-url`, {
+    contentType,
+    sizeBytes: conteudo.length,
+  });
+  const put = await fetch(ticket.uploadUrl, { method: 'PUT', body: new Uint8Array(conteudo), headers: ticket.headers });
+  if (!put.ok) throw new Error(`Upload falhou: ${put.status}`);
+  return a.post<{ id: string; version: number }>(`/me/expenses/${despesaId}/documents`, { fileId: ticket.fileId, kind });
+}
+
+/** Despesa com a nota (XML) e enviada para revisão, toda pela API. */
+export async function despesaEnviadaViaApi(ctx: BrowserContext, campanhaId: string, descricao: string, itens: { descricao: string; centavos: number }[]) {
+  const a = apiDo(ctx);
+  const total = itens.reduce((t, i) => t + i.centavos, 0);
+  const d = await a.post<{ id: string }>(`/me/campaigns/${campanhaId}/expenses`, {
+    budgetCategory: 'ALIMENTOS',
+    description: descricao,
+    supplierName: 'Supermercado Exemplo',
+    supplierDocument: '11222333000181',
+    amountCents: total,
+    spentOn: new Date().toISOString().slice(0, 10),
+  });
+  await anexarViaApi(ctx, d.id, Buffer.from(nfceXml(itens).xml), 'application/xml', 'FISCAL');
+  const atual = await a.get<{ version: number }>(`/me/expenses/${d.id}`);
+  await a.post(`/me/expenses/${d.id}/actions/submit`, { version: atual.version });
+  return d.id;
+}

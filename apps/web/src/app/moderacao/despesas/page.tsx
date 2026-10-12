@@ -6,9 +6,10 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { RiskBadge } from '@/components/expense-analysis';
 import { ExpenseStatusBadge } from '@/components/expense-badges';
 import { RequireSession } from '@/components/require-session';
-import { Alert, Container, PageTitle, Skeleton } from '@/components/ui';
+import { Alert, Badge, Container, PageTitle, Skeleton } from '@/components/ui';
 import { api, errorMessage, needsMfa } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
 
@@ -26,7 +27,7 @@ function Fila() {
 
   return (
     <Container className="py-10">
-      <PageTitle title="Moderação" subtitle="Despesas enviadas para revisão, das mais antigas para as mais recentes." />
+      <PageTitle title="Moderação" subtitle="Despesas enviadas para revisão, das de maior risco para as de menor; empate, a mais antiga primeiro." />
       <nav className="mb-6 flex gap-2" aria-label="Filas">
         <Link href="/moderacao" className="rounded-full border border-line-strong px-3 py-1 text-sm font-bold text-ink-700 hover:bg-paper-2">
           Campanhas
@@ -55,7 +56,11 @@ function Fila() {
                   </p>
                 )}
               </div>
-              <ExpenseStatusBadge status={d.status} />
+              <div className="flex flex-wrap items-center gap-2">
+                {d.appealed && <Badge tone="sky">Contestação</Badge>}
+                <RiskBadge level={d.riskLevel} score={d.riskScore} />
+                <ExpenseStatusBadge status={d.status} />
+              </div>
             </li>
           ))}
         </ul>

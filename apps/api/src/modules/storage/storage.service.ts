@@ -10,12 +10,13 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from '../../infra/config/config';
 import { DB, type Database } from '../../infra/db/db';
 import { DomainError, forbidden, notFound } from '../../infra/http/errors';
 import { newId } from '../../infra/ids';
 import { type DetectedType, EXTENSION, detectFileType } from './domain/file-type';
+import { SIMILAR_IMAGE_MAX_DISTANCE, perceptualHash } from './infra/perceptual-hash';
 import { storedFiles } from './infra/storage.schema';
 
 export type FilePurpose = 'campaign_image' | 'expense_document';
@@ -162,6 +163,7 @@ export class StorageService implements OnModuleInit {
     }
 
     const sha256 = createHash('sha256').update(conteudo).digest('hex');
+    const hashVisual = arquivo.purpose === 'expense_document' && detectado!.startsWith('image/') ? await perceptualHash(conteudo).catch(() => null) : null;
     let publicUrl: string | null = null;
     let bucket = arquivo.bucket;
     const objectKey = `files/${arquivo.purpose}/${fileId}.${EXTENSION[detectado!]}`;
@@ -187,7 +189,7 @@ export class StorageService implements OnModuleInit {
 
     await this.db
       .update(storedFiles)
-      .set({ status: 'VALIDATED', detectedMimeType: detectado, sha256, publicUrl, bucket, objectKey, validatedAt: new Date() })
+      .set({ status: 'VALIDATED', detectedMimeType: detectado, sha256, perceptualHash: hashVisual, publicUrl, bucket, objectKey, validatedAt: new Date() })
       .where(and(eq(storedFiles.id, fileId), eq(storedFiles.status, 'PENDING_UPLOAD')));
     return { id: fileId, publicUrl, mimeType: detectado!, sha256 };
   }
@@ -224,6 +226,26 @@ export class StorageService implements OnModuleInit {
       .from(storedFiles)
       .where(and(eq(storedFiles.sha256, sha256), eq(storedFiles.status, 'VALIDATED')));
     return linhas.map((l) => l.id).filter((id) => !exceptIds.includes(id));
+  }
+
+  /**
+   * Imagens validadas visualmente parecidas (dHash a até
+   * SIMILAR_IMAGE_MAX_DISTANCE bits) com alguma das informadas, exceto elas
+   * mesmas e as de conteúdo idêntico (essas o SHA-256 já pega).
+   */
+  async visuallySimilarFiles(fileIds: string[], exceptIds: string[]): Promise<string[]> {
+    if (fileIds.length === 0) return [];
+    const r = await this.db.execute<{ id: string }>(sql`
+      select distinct o.id
+        from stored_files f
+        join stored_files o
+          on o.perceptual_hash is not null
+         and o.status = 'VALIDATED'
+         and o.sha256 <> f.sha256
+         and bit_count(('x' || o.perceptual_hash)::bit(64) # ('x' || f.perceptual_hash)::bit(64)) <= ${SIMILAR_IMAGE_MAX_DISTANCE}
+       where f.id in (${sql.join(fileIds.map((id) => sql`${id}::uuid`), sql`, `)})
+         and f.perceptual_hash is not null`);
+    return r.rows.map((l) => l.id).filter((id) => !exceptIds.includes(id));
   }
 
   /** Conteúdo de um arquivo validado (para leitura de XML/QR no worker ou na API). */

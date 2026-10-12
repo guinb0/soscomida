@@ -68,9 +68,18 @@ de moderador exige MFA e que import cruzando fronteira de módulo quebra o lint.
 
 ## Fase 3 — IA e antifraude
 
-`LlmProvider` (OpenAI primeiro), análise de aderência com saída validada,
-proteção contra prompt injection, motor de regras com score configurável,
-fila de revisão, contestação, orçamento de IA, avaliação automatizada.
+- [x] `AiService` + `LlmProvider` desacoplado: adaptador Chat Completions (OpenAI/OpenRouter/Mistral) e simulado para dev
+- [x] Análise de aderência com saída validada (Zod), nova tentativa e queda para revisão humana
+- [x] Proteção contra prompt injection: dados isolados como JSON não confiável + pré-filtro determinístico (alerta)
+- [x] Motor de risco versionado (`risco-v1`), fila de revisão ordenada por risco, painel da análise e reanálise
+- [x] Contestação de recusa (uma vez; outra pessoa revisa; rateio conferido de novo)
+- [x] Orçamento mensal de IA com alerta em 80% e corte em 100%; custo por chamada registrado
+- [x] Avaliação automatizada (16 casos sintéticos, comando `ai-eval`)
+- [x] Antifraude determinístico: assinatura XMLDSig, hash perceptual de imagens, chave lida do texto do PDF
+- [ ] Rodar a avaliação com um modelo real (custa dinheiro; precisa de chave e autorização)
+- [ ] Validar a cadeia ICP-Brasil do certificado da assinatura
+- [ ] OCR/IA multimodal para foto sem QR e PDF escaneado
+- [ ] Painel de administração das políticas de risco (hoje os pesos estão no código, versionados)
 
 ## Fase 4 — Financeiro avançado
 

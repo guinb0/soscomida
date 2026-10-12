@@ -1,7 +1,8 @@
 import { BUDGET_LABELS, type PublicExpense } from '@soscomida/contracts';
 import { formatBrl } from '@soscomida/shared';
 import { formatDate } from '@/lib/utils';
-import { ExpenseSeals, ExpenseStatusBadge } from './expense-badges';
+import { ExpenseSeals, ExpenseStatusBadge, SignatureLine } from './expense-badges';
+import { Badge } from './ui';
 
 const MODELO = { NFE_55: 'NF-e', NFCE_65: 'NFC-e' } as const;
 
@@ -35,7 +36,10 @@ export function PublicExpenses({ expenses }: { expenses: PublicExpense[] }) {
             </div>
             <div className="text-right">
               <p className="font-display text-xl font-extrabold text-ink-900">{formatBrl(e.amountCents)}</p>
-              <ExpenseStatusBadge status={e.status} />
+              <div className="flex flex-wrap justify-end gap-1.5">
+                {e.appealed && e.status !== 'APPROVED' && e.status !== 'REJECTED' && <Badge tone="sky">Recusa contestada</Badge>}
+                <ExpenseStatusBadge status={e.status} />
+              </div>
             </div>
           </div>
           <div className="mt-3">
@@ -49,6 +53,11 @@ export function PublicExpenses({ expenses }: { expenses: PublicExpense[] }) {
                 {f.effectiveTotalCents !== null && <> · {formatBrl(f.effectiveTotalCents)}</>}
                 {f.totalSource === 'DECLARED' && ' (total informado pela organização)'}
               </summary>
+              {f.signature && (
+                <div className="mt-2">
+                  <SignatureLine signature={f.signature} />
+                </div>
+              )}
               {f.items.length > 0 ? (
                 <ul className="mt-2 divide-y divide-line">
                   {f.items.map((it, j) => (

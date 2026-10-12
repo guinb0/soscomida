@@ -3,11 +3,12 @@ import {
   EXPENSE_FLAG_LABELS,
   EXPENSE_STATUS_LABELS,
   type ExpenseFlag,
+  type ExpenseDocument,
   type ExpenseStatus,
   FISCAL_CHECK_LABELS,
   type FiscalCheck,
 } from '@soscomida/contracts';
-import { AlertTriangle, BadgeCheck, CircleDashed, FileWarning, PackageCheck, Receipt, ShieldX } from 'lucide-react';
+import { AlertTriangle, BadgeCheck, CircleDashed, FileSignature, FileWarning, PackageCheck, Receipt, ShieldX } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from './ui';
 
@@ -82,6 +83,35 @@ export function ExpenseFlags({ flags, title = 'Alertas automáticos' }: { flags:
         ))}
       </ul>
       <p className="mt-2 text-xs text-sun-800">Alertas não reprovam a despesa sozinhos: orientam a revisão humana.</p>
+    </div>
+  );
+}
+
+type Signature = NonNullable<NonNullable<ExpenseDocument['fiscalDocument']>['signature']>;
+
+/**
+ * Assinatura digital do XML. "Íntegra" quer dizer que o arquivo não foi
+ * alterado depois de assinado — não que a nota seja autêntica no fisco, nem
+ * que o certificado seja ICP-Brasil (a cadeia não é validada).
+ */
+export function SignatureLine({ signature, showSubject = false }: { signature: Signature; showSubject?: boolean }) {
+  const texto =
+    signature.status === 'VALID'
+      ? signature.problems.length
+        ? 'Assinatura íntegra, mas o certificado não confere'
+        : 'Assinatura digital íntegra (arquivo não alterado depois de assinado)'
+      : signature.status === 'MISSING'
+        ? 'XML sem assinatura digital'
+        : 'Assinatura digital inválida: arquivo alterado ou montado';
+  const ruim = signature.status !== 'VALID' || signature.problems.length > 0;
+  return (
+    <div className={cn('flex gap-1.5', ruim ? 'text-maca-700' : 'text-melancia-800')}>
+      <FileSignature className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <span>
+        {texto}
+        {signature.problems.length > 0 && signature.status === 'VALID' && <>: {signature.problems.join('; ')}</>}
+        {showSubject && signature.certificateSubject && <span className="block text-xs text-ink-500">Certificado: {signature.certificateSubject}</span>}
+      </span>
     </div>
   );
 }

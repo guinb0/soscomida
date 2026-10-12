@@ -74,6 +74,11 @@ export interface AccountabilityTarget {
   endsAt: Date;
   /** Orçamento planejado somado por categoria. */
   plannedByCategory: Map<string, number>;
+  /** Para a análise de aderência das despesas (dados públicos da campanha). */
+  summary: string;
+  description: string;
+  category: string;
+  budgetLines: { category: string; description: string; plannedCents: number }[];
 }
 
 /** Status em que a campanha recebe prestação de contas (já recebeu ou pode receber doações). */
@@ -329,6 +334,10 @@ export class CampaignsService {
       publishedAt: c.publishedAt,
       endsAt: c.endsAt,
       plannedByCategory: planejado,
+      summary: c.summary,
+      description: c.description,
+      category: c.category,
+      budgetLines: itens.map((i) => ({ category: i.category, description: i.description, plannedCents: i.plannedCents })),
     };
   }
 

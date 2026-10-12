@@ -32,6 +32,8 @@ export default defineConfig({
     {
       command: 'node --env-file-if-exists=.env dist/main.js',
       cwd: path.join(raiz, 'apps/api'),
+      // A suíte cria várias contas por minuto do mesmo IP: o limite de produção (10/min) barraria.
+      env: { AUTH_RATE_LIMIT_PER_MINUTE: '1000' },
       url: 'http://127.0.0.1:4000/api/health/ready',
       reuseExistingServer: true,
       timeout: 60_000,

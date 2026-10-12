@@ -57,6 +57,23 @@ const envSchema = z
     FISCAL_VERIFICATION_PROVIDER: z.enum(['none', 'dev']).default('none'),
 
     /**
+     * IA (análise de aderência das despesas). none = sem IA (só regras
+     * determinísticas). simulated = regras locais fingindo ser a IA, só
+     * dev/test. openai_compatible = Chat Completions (OpenAI, OpenRouter,
+     * Mistral...) em AI_BASE_URL — manda dados para fora e custa dinheiro.
+     */
+    AI_PROVIDER: z.enum(['none', 'simulated', 'openai_compatible']).default('none'),
+    AI_BASE_URL: z.url().default('https://api.openai.com/v1'),
+    AI_API_KEY: z.string().optional(),
+    AI_MODEL: z.string().optional(),
+    AI_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(30_000),
+    /** Orçamento mensal em centavos de real. Em 80% alerta; em 100% a IA para e tudo vai para revisão humana. */
+    AI_MONTHLY_BUDGET_CENTS: z.coerce.number().int().min(0).default(0),
+    /** Preço do modelo em centavos de real por milhão de tokens (entrada e saída). */
+    AI_INPUT_PRICE_CENTS_PER_MTOK: z.coerce.number().int().min(0).optional(),
+    AI_OUTPUT_PRICE_CENTS_PER_MTOK: z.coerce.number().int().min(0).optional(),
+
+    /**
      * log = só registra no log (testes). smtp = envia por SMTP_URL; em
      * desenvolvimento, o Mailpit do compose (http://localhost:8025).
      */
@@ -85,6 +102,17 @@ const envSchema = z
     }
     if (env.NODE_ENV !== 'development' && env.NODE_ENV !== 'test' && env.FISCAL_VERIFICATION_PROVIDER === 'dev') {
       ctx.addIssue({ code: 'custom', path: ['FISCAL_VERIFICATION_PROVIDER'], message: 'O provedor fiscal simulado é proibido fora de development/test.' });
+    }
+    if (env.NODE_ENV !== 'development' && env.NODE_ENV !== 'test' && env.AI_PROVIDER === 'simulated') {
+      ctx.addIssue({ code: 'custom', path: ['AI_PROVIDER'], message: 'A IA simulada (regras locais) é proibida fora de development/test.' });
+    }
+    if (env.AI_PROVIDER === 'openai_compatible') {
+      for (const chave of ['AI_API_KEY', 'AI_MODEL', 'AI_INPUT_PRICE_CENTS_PER_MTOK', 'AI_OUTPUT_PRICE_CENTS_PER_MTOK'] as const) {
+        if (env[chave] === undefined || env[chave] === '') ctx.addIssue({ code: 'custom', path: [chave], message: `${chave} é obrigatório com AI_PROVIDER=openai_compatible` });
+      }
+      if (env.AI_MONTHLY_BUDGET_CENTS <= 0) {
+        ctx.addIssue({ code: 'custom', path: ['AI_MONTHLY_BUDGET_CENTS'], message: 'Defina um orçamento mensal (centavos) para usar um provedor de IA pago.' });
+      }
     }
     if (env.WEB_REVALIDATE_URL && !env.WEB_REVALIDATE_SECRET) {
       ctx.addIssue({ code: 'custom', path: ['WEB_REVALIDATE_SECRET'], message: 'WEB_REVALIDATE_SECRET é obrigatório com WEB_REVALIDATE_URL' });

@@ -18,6 +18,8 @@ export const storedFiles = pgTable(
     declaredSizeBytes: bigint('declared_size_bytes', { mode: 'number' }).notNull(),
     detectedMimeType: text('detected_mime_type'),
     sha256: text('sha256'),
+    /** dHash (16 hex) de imagens de comprovantes: acha a mesma foto recomprimida. */
+    perceptualHash: text('perceptual_hash'),
     status: text('status').notNull().default('PENDING_UPLOAD'),
     rejectionReason: text('rejection_reason'),
     publicUrl: text('public_url'),

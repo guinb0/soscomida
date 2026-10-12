@@ -1,5 +1,6 @@
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import {
+  type AppealInput,
   type AttachDocumentInput,
   type Assessment,
   type CampaignTransparency,
@@ -18,6 +19,7 @@ import { and, asc, desc, eq, inArray, ne, or, sql } from 'drizzle-orm';
 import { DB, type Database, type Executor, isUniqueViolation } from '../../infra/db/db';
 import { DomainError, conflict, forbidden, notFound, versionConflict } from '../../infra/http/errors';
 import { newId } from '../../infra/ids';
+import { detectSuspiciousInstructions } from '../ai';
 import { AuditService } from '../audit';
 import { ACCOUNTABLE_STATUSES, type AccountabilityTarget, CampaignsService } from '../campaigns';
 import { type Extraction, type FiscalDocumentView, FiscalService } from '../fiscal';
@@ -134,7 +136,11 @@ export class ExpensesService {
           allocatedCents: alocacao?.cents ?? null,
           sharingJustification: alocacao?.shared ? input.sharingJustification! : null,
           extractionStatus: alocacao ? 'EXTRACTED' : 'NEEDS_TOTAL',
-          extractionMessage: alocacao ? null : 'O QR Code não informa o total da nota. Informe o valor total impresso no cupom.',
+          extractionMessage: alocacao
+            ? null
+            : extraction.kind === 'PDF_KEY'
+              ? 'Chave de acesso lida do PDF. Confira e informe o valor total da nota.'
+              : 'O QR Code não informa o total da nota. Informe o valor total impresso no cupom.',
         });
       }
       await this.touch(tx, despesa);
@@ -222,6 +228,45 @@ export class ExpensesService {
     return this.getOwned(auth, expenseId);
   }
 
+  /**
+   * Contestação de uma recusa: uma vez por despesa, com justificativa. A
+   * despesa volta para a fila e outra pessoa revisa. A recusa tinha liberado a
+   * parte das notas: se outra despesa ocupou esse valor, a contestação para.
+   */
+  async appeal(auth: AuthContext, expenseId: string, input: AppealInput): Promise<OwnedExpense> {
+    await this.db.transaction(async (tx) => {
+      const [d] = await tx.select().from(expenses).where(eq(expenses.id, expenseId)).for('update');
+      if (!d) throw notFound('Despesa');
+      const campanha = await this.campaigns.getAccountabilityTarget(d.campaignId, tx);
+      if (!campanha || campanha.organizerId !== auth.userId) throw notFound('Despesa');
+      if (d.version !== input.version) throw versionConflict();
+      if (d.appealedAt) throw conflict('APPEAL_ALREADY_USED', 'Esta despesa já foi contestada uma vez');
+
+      const docs = await tx.select().from(expenseDocuments).where(eq(expenseDocuments.expenseId, d.id));
+      for (const doc of docs.filter((x) => x.fiscalDocumentId && x.allocatedCents)) {
+        const { effectiveTotalCents: total } = await this.fiscal.lockForAllocation(tx, doc.fiscalDocumentId!);
+        const [r] = await tx
+          .select({ usado: sql<string>`coalesce(sum(${expenseDocuments.allocatedCents}), 0)::text` })
+          .from(expenseDocuments)
+          .innerJoin(expenses, eq(expenses.id, expenseDocuments.expenseId))
+          .where(and(eq(expenseDocuments.fiscalDocumentId, doc.fiscalDocumentId!), ne(expenseDocuments.expenseId, d.id), inArray(expenses.status, [...COUNTED_STATUSES])));
+        if (total !== null && Number(r?.usado ?? 0) + doc.allocatedCents! > total) {
+          throw new DomainError('APPEAL_FISCAL_REALLOCATED', 'Depois da recusa, parte desta nota foi usada em outra despesa. Não é possível contestar.', HttpStatus.CONFLICT);
+        }
+      }
+      const comContestacao = { ...d, appealReason: input.reason };
+      await this.changeStatus(tx, d, 'appeal', 'organizer', auth.userId, input.reason, {
+        appealReason: input.reason,
+        appealedAt: new Date(),
+        submittedAt: new Date(),
+        reviewerId: null,
+        decidedAt: null,
+        flags: await this.flagsFor(tx, comContestacao, campanha, docs),
+      });
+    });
+    return this.getOwned(auth, expenseId);
+  }
+
   /** Link temporário para o arquivo. Organizador da campanha ou equipe de revisão. */
   async documentUrl(auth: AuthContext, expenseId: string, documentId: string) {
     const [d] = await this.db.select().from(expenses).where(eq(expenses.id, expenseId));
@@ -244,7 +289,8 @@ export class ExpensesService {
       .select()
       .from(expenses)
       .where(inArray(expenses.status, ['SUBMITTED', 'IN_REVIEW']))
-      .orderBy(asc(expenses.submittedAt))
+      // Maior risco primeiro; sem análise ainda, depois; empate: quem chegou antes.
+      .orderBy(sql`${expenses.riskScore} desc nulls last`, asc(expenses.submittedAt))
       .limit(200);
     const campanhas = await this.campaigns.summariesByIds([...new Set(linhas.map((l) => l.campaignId))]);
     return linhas.map((l) => ({
@@ -255,10 +301,13 @@ export class ExpensesService {
       status: l.status as ExpenseStatus,
       flags: l.flags,
       submittedAt: l.submittedAt?.toISOString() ?? null,
+      riskScore: l.riskScore,
+      riskLevel: l.riskLevel as ExpenseQueueItem['riskLevel'],
+      appealed: l.appealedAt !== null,
     }));
   }
 
-  async getForReview(expenseId: string): Promise<ModerationExpense> {
+  async getForReview(expenseId: string): Promise<Omit<ModerationExpense, 'analysis'>> {
     const [d] = await this.db.select().from(expenses).where(eq(expenses.id, expenseId));
     if (!d) throw notFound('Despesa');
     const campanha = (await this.campaigns.getAccountabilityTarget(d.campaignId))!;
@@ -273,6 +322,7 @@ export class ExpensesService {
       campaign: { id: campanha.id, title: campanha.title, slug: campanha.slug },
       organizerName: nomes.get(campanha.organizerId) ?? '',
       reviewerId: d.reviewerId,
+      rejectedBy: d.rejectedBy,
       budgetSituation: {
         plannedCents: campanha.plannedByCategory.get(d.budgetCategory) ?? 0,
         committedCents: await this.committedInCategory(this.db, d.campaignId, d.budgetCategory),
@@ -284,6 +334,7 @@ export class ExpensesService {
     await this.db.transaction(async (tx) => {
       const d = await this.lockForReview(tx, auth, expenseId);
       if (d.version !== version) throw versionConflict();
+      if (d.appealedAt && d.rejectedBy === auth.userId) throw forbidden('Quem recusou a despesa não revisa a contestação');
       await this.changeStatus(tx, d, 'claim', 'reviewer', auth.userId, null, { reviewerId: auth.userId });
     });
   }
@@ -293,6 +344,7 @@ export class ExpensesService {
       const d = await this.lockForReview(tx, auth, expenseId);
       if (d.version !== input.version) throw versionConflict();
       if (d.reviewerId !== auth.userId && !auth.roles.includes('admin')) throw forbidden('Esta despesa está com outra pessoa da revisão');
+      if (d.appealedAt && d.rejectedBy === auth.userId) throw forbidden('Quem recusou a despesa não revisa a contestação');
 
       const docs = await tx.select().from(expenseDocuments).where(eq(expenseDocuments.expenseId, d.id));
       const extra: Partial<ExpenseRow> = { decidedAt: new Date(), decisionReason: input.reason.trim() };
@@ -309,6 +361,7 @@ export class ExpensesService {
         extra.reviewerId = null;
         extra.decidedAt = null;
       }
+      if (acao === 'reject') extra.rejectedBy = auth.userId;
       await this.changeStatus(tx, d, acao, 'reviewer', auth.userId, input.reason, extra);
     });
   }
@@ -336,11 +389,13 @@ export class ExpensesService {
       paymentProof: e.paymentProof,
       delivery: e.delivery,
       decisionReason: e.status === 'APPROVED' || e.status === 'REJECTED' ? e.decisionReason : null,
+      appealed: e.appeal !== null,
       fiscalDocuments: e.documents
         .filter((x) => x.fiscalDocument)
         .map((x) => {
-          const { accessKey: _k, id: _i, verificationReason: _r, issuerDocument, ...resto } = x.fiscalDocument!;
-          return { ...resto, issuerDocument: publicSupplierDocument(issuerDocument) ?? '' };
+          const { accessKey: _k, id: _i, verificationReason: _r, issuerDocument, signature, ...resto } = x.fiscalDocument!;
+          // O titular do certificado pode ser pessoa física (e-CPF): não vai a público.
+          return { ...resto, issuerDocument: publicSupplierDocument(issuerDocument) ?? '', signature: signature ? { ...signature, certificateSubject: null } : null };
         }),
     }));
   }
@@ -539,6 +594,24 @@ export class ExpensesService {
     }
 
     const arquivos = await this.storage.filesInfo(docs.map((x) => x.fileId));
+    const usadosEmOutra = async (fileIds: string[]) =>
+      fileIds.length > 0 &&
+      (
+        await executor
+          .select({ id: expenseDocuments.id })
+          .from(expenseDocuments)
+          .where(and(inArray(expenseDocuments.fileId, fileIds), ne(expenseDocuments.expenseId, d.id)))
+          .limit(1)
+      ).length > 0;
+    const imagens = [...arquivos.values()].filter((a) => a.mimeType.startsWith('image/')).map((a) => a.id);
+    const parecida = await usadosEmOutra(await this.storage.visuallySimilarFiles(imagens, docs.map((x) => x.fileId)));
+    const textos = [
+      d.description,
+      d.supplierName,
+      d.appealReason,
+      ...docs.map((x) => x.sharingJustification),
+      ...[...views.values()].flatMap((v) => v.items.map((i) => i.description)),
+    ];
     let duplicado = false;
     for (const a of arquivos.values()) {
       const iguais = await this.storage.filesWithSameContent(a.sha256, docs.map((x) => x.fileId));
@@ -572,11 +645,43 @@ export class ExpensesService {
           warnings: v.warnings,
           totalFromDocument: v.totalCents !== null,
           sharedWithOtherExpenses: compartilhadas.has(v.id),
+          signatureStatus: v.source === 'XML' ? v.signatureStatus : null,
+          certificateProblems: v.signatureStatus === 'VALID' ? (v.signatureDetails?.problems.length ?? 0) : 0,
         };
       }),
       hasPaymentProof: docs.some((x) => x.kind === 'PAYMENT_PROOF'),
       duplicateFile: duplicado,
+      similarImage: parecida,
+      suspiciousInstructions: detectSuspiciousInstructions(textos).length > 0,
     });
+  }
+
+  /**
+   * O que a análise automática precisa: alertas recalculados agora, situação
+   * fiscal, itens das notas, textos enviados pelo organizador e a campanha.
+   */
+  async analysisInput(expenseId: string) {
+    const [d] = await this.db.select().from(expenses).where(eq(expenses.id, expenseId));
+    if (!d) throw notFound('Despesa');
+    const campanha = await this.campaigns.getAccountabilityTarget(d.campaignId);
+    if (!campanha) throw notFound('Campanha');
+    const docs = await this.db.select().from(expenseDocuments).where(eq(expenseDocuments.expenseId, d.id));
+    const fiscais = docs.filter((x) => x.fiscalDocumentId && x.allocatedCents);
+    const views = await this.fiscal.views([...new Set(fiscais.map((f) => f.fiscalDocumentId!))]);
+    const itens = [...views.values()].flatMap((v) => v.items);
+    return {
+      expense: d,
+      campaign: campanha,
+      flags: await this.flagsFor(this.db, d, campanha, docs),
+      fiscalCheck: aggregateFiscalCheck(fiscais.map((f) => views.get(f.fiscalDocumentId!)?.verificationStatus ?? 'NOT_VERIFIED')),
+      items: itens,
+      texts: [d.description, d.supplierName, d.appealReason, ...docs.map((x) => x.sharingJustification), ...itens.map((i) => i.description)],
+    };
+  }
+
+  /** Grava o risco da última análise na despesa (ordena a fila). Não mexe na versão. */
+  async setRisk(expenseId: string, score: number, level: string): Promise<void> {
+    await this.db.update(expenses).set({ riskScore: score, riskLevel: level }).where(eq(expenses.id, expenseId));
   }
 
   private async changeStatus(
@@ -657,6 +762,9 @@ export class ExpensesService {
       source: v.source,
       verificationStatus: v.verificationStatus,
       verificationReason: v.verificationReason,
+      signature: v.signatureStatus
+        ? { status: v.signatureStatus, problems: v.signatureDetails?.problems ?? [], certificateSubject: v.signatureDetails?.certificate?.subject ?? null }
+        : null,
       items: v.items.map((i) => ({ description: i.description, quantity: i.quantity, unit: i.unit, totalCents: i.totalCents })),
     });
 
@@ -679,6 +787,7 @@ export class ExpensesService {
         delivery: l.delivery as Assessment,
         flags: l.flags,
         decisionReason: l.decisionReason,
+        appeal: l.appealedAt && l.appealReason ? { reason: l.appealReason, at: l.appealedAt.toISOString() } : null,
         documents: meus.map((x) => ({
           id: x.id,
           kind: x.kind as OwnedExpense['documents'][number]['kind'],

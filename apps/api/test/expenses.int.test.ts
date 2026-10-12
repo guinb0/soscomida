@@ -7,7 +7,7 @@ import sharp from 'sharp';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type TestApp, agent, createTestApp, registeredUser, userWithRole } from './app';
-import { accessKey, nfeXml } from './fiscal-fixtures';
+import { accessKey, assinarNfe, nfeXml } from './fiscal-fixtures';
 import { activeCampaign, campaignInput, drainOutbox } from './fixtures';
 
 let t: TestApp;
@@ -73,12 +73,13 @@ describe('prestação de contas: fluxo completo', () => {
     await simularFisco(key, 'AUTHORIZED');
 
     const e = await novaDespesa(organizador.http, campaign.id);
-    let r = await anexar(organizador.http, e.id, Buffer.from(xml), 'application/xml', 'FISCAL');
+    let r = await anexar(organizador.http, e.id, Buffer.from(assinarNfe(xml)), 'application/xml', 'FISCAL');
     expect(r.status).toBe(200);
     let d = r.body as OwnedExpense;
     expect(d.documents[0]).toMatchObject({ kind: 'FISCAL', allocatedCents: 3_489, extraction: { status: 'EXTRACTED' } });
     expect(d.documents[0]!.fiscalDocument).toMatchObject({ accessKey: key, effectiveTotalCents: 3_489, totalSource: 'DOCUMENT', source: 'XML' });
     expect(d.documents[0]!.fiscalDocument!.items.map((i) => i.description)).toEqual(['ARROZ 5KG', 'FEIJAO 1KG']);
+    expect(d.documents[0]!.fiscalDocument!.signature).toMatchObject({ status: 'VALID', problems: [] });
 
     r = await anexar(organizador.http, e.id, pdf(), 'application/pdf', 'PAYMENT_PROOF');
     d = r.body as OwnedExpense;
@@ -108,6 +109,7 @@ describe('prestação de contas: fluxo completo', () => {
     const texto = JSON.stringify(publicas);
     expect(texto).not.toContain(key); // chave de acesso não é publicada
     expect(texto).not.toContain('52998224725'); // CPF do comprador no XML
+    expect(publicas[0]!.fiscalDocuments[0]!.signature).toEqual({ status: 'VALID', problems: [], certificateSubject: null });
 
     const transp = (await agent(t.app).get(`/api/campaigns/${campaign.slug}/transparency`).expect(200)).body as CampaignTransparency;
     expect(transp.expenses).toMatchObject({ available: true, approvedCents: 3_489, inReviewCents: 0, fiscallyAuthenticatedCents: 3_489 });

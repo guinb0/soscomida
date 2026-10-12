@@ -1,3 +1,4 @@
+import { AiModule } from './ai';
 import { AuditModule } from './audit';
 import { CampaignsModule } from './campaigns';
 import { DonationsModule } from './donations';
@@ -23,6 +24,7 @@ export const DOMAIN_MODULES = [
   IdentityModule,
   StorageModule,
   LedgerModule,
+  AiModule,
   CampaignsModule,
   ModerationModule,
   PaymentsModule,

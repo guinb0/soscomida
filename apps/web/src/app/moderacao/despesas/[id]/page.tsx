@@ -7,7 +7,8 @@ import { ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { ExpenseFlags, ExpenseSeals, ExpenseStatusBadge } from '@/components/expense-badges';
+import { AnalysisPanel } from '@/components/expense-analysis';
+import { ExpenseFlags, ExpenseSeals, ExpenseStatusBadge, SignatureLine } from '@/components/expense-badges';
 import { abrirDocumento } from '@/components/expense-documents';
 import { RequireSession } from '@/components/require-session';
 import { Alert, Button, Card, Container, Label, PageTitle, Select, Skeleton, Textarea } from '@/components/ui';
@@ -31,6 +32,7 @@ function Revisao({ id }: { id: string }) {
   const [entrega, setEntrega] = useState<'' | 'ACCEPTED' | 'REJECTED'>('');
   const [erro, setErro] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
+  const [analisando, setAnalisando] = useState(false);
 
   useEffect(() => {
     if (needsMfa(error)) router.replace(`/seguranca?next=/moderacao/despesas/${id}`);
@@ -49,6 +51,18 @@ function Revisao({ id }: { id: string }) {
       await client.invalidateQueries({ queryKey: ['moderation', 'expenses'] });
     } catch (err) {
       setErro(errorMessage(err));
+    }
+  };
+  const reanalisar = async () => {
+    setErro(null);
+    setAnalisando(true);
+    try {
+      await api(`/moderation/expenses/${e.id}/analysis`, { method: 'POST' });
+      await client.invalidateQueries({ queryKey: chave });
+    } catch (err) {
+      setErro(errorMessage(err));
+    } finally {
+      setAnalisando(false);
     }
   };
   const decidir = (decision: 'APPROVE' | 'REQUEST_CHANGES' | 'REJECT', sucesso: string) =>
@@ -84,6 +98,15 @@ function Revisao({ id }: { id: string }) {
             </p>
           </Card>
 
+          {e.appeal && (
+            <Alert tone="sky">
+              <strong>Contestação do organizador</strong> ({formatDate(e.appeal.at)}): {e.appeal.reason}
+              {e.decisionReason && <span className="mt-1 block text-ink-600">Motivo da recusa anterior: {e.decisionReason}</span>}
+            </Alert>
+          )}
+
+          <AnalysisPanel analysis={e.analysis} busy={analisando} onReanalyze={() => void reanalisar()} />
+
           <ExpenseFlags flags={e.flags} title="Alertas (recalculados agora)" />
 
           <Card className="p-6">
@@ -108,8 +131,9 @@ function Revisao({ id }: { id: string }) {
                         <p className="break-all font-mono text-xs text-ink-500">Chave: {f.accessKey}</p>
                         <p>
                           Total {f.effectiveTotalCents !== null ? formatBrl(f.effectiveTotalCents) : '—'} ({f.totalSource === 'DECLARED' ? 'declarado pelo organizador' : 'lido do documento'}) ·
-                          nesta despesa {d.allocatedCents !== null ? formatBrl(d.allocatedCents) : '—'} · lida de {f.source === 'XML' ? 'XML' : f.source === 'QR_CODE' ? 'QR Code' : 'chave digitada'}
+                          nesta despesa {d.allocatedCents !== null ? formatBrl(d.allocatedCents) : '—'} · lida de {f.source === 'XML' ? 'XML' : f.source === 'QR_CODE' ? 'QR Code' : 'chave digitada ou do PDF'}
                         </p>
+                        {f.signature && <SignatureLine signature={f.signature} showSubject />}
                         <p>
                           Consulta ao fisco: <strong>{FISCAL_CHECK_LABELS[v]}</strong>
                           {f.verificationReason && <span className="text-ink-500"> — {f.verificationReason}</span>}

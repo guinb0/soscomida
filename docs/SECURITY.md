@@ -90,6 +90,19 @@ XML fiscal: DTD e entidades são recusados antes do parse (XXE e expansão de
 entidades), tamanho máximo 5 MB, valores lidos como texto e convertidos para
 centavos sem float.
 
+IA (Fase 3): dados do caso vão só como JSON numa mensagem separada, marcada
+como não confiável; pré-filtro determinístico de instruções embutidas vira
+alerta; saída validada por esquema; a IA não tem ferramentas nem rede e só
+recomenda. Minimização: sem nome de pessoas, CPF, chave de acesso ou arquivos.
+Provedor externo exige base legal e contrato (transferência internacional) —
+**pendente jurídico**; padrão em produção é `AI_PROVIDER=none`.
+
+Assinatura do XML: verificada com xml-crypto (`publicCert` vindo do próprio
+XML, nunca `getCertFromKeyInfo` padrão), só a assinatura filha de `NFe`,
+`Id` único no documento, e os dados usados para conferir vêm de
+`getSignedReferences()` (trecho autenticado), não do XML inteiro. O titular
+do certificado não vai a público (pode ser e-CPF).
+
 ## Modelo de ameaças (resumo)
 
 | Ameaça | Exemplo | Mitigação |

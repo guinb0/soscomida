@@ -7,8 +7,10 @@ import { newId } from '../../infra/ids';
 import { OutboxService } from '../outbox';
 import { StorageService } from '../storage';
 import { type ParsedNfe, parseNfeXml } from './domain/nfe-xml';
+import { type SignatureCheck, type SignatureDetails, signatureDetails, verifyNfeSignature } from './domain/xml-signature';
 import { FISCAL_VERIFICATION_PROVIDERS, type FiscalVerificationProvider, type FiscalVerificationResult } from './domain/verification';
 import { fiscalDocumentItems, fiscalDocuments, fiscalVerifications } from './infra/fiscal.schema';
+import { findAccessKeys, pdfText } from './infra/pdf-text';
 import { readQrCode } from './infra/qr-reader';
 
 export const FISCAL_EVENTS = {
@@ -26,8 +28,10 @@ const XML_ERRORS: Record<string, string> = {
 
 /** Resultado da leitura automática de um arquivo. */
 export type Extraction =
-  | { kind: 'NFE_XML'; parsed: ParsedNfe }
+  | { kind: 'NFE_XML'; parsed: ParsedNfe; signature: SignatureCheck }
   | { kind: 'NFCE_QR'; qr: NfceQrData }
+  /** Chave achada no texto do PDF (DANFE); o total vem do organizador. */
+  | { kind: 'PDF_KEY'; accessKey: string }
   | { kind: 'NONE'; reason: string };
 
 export interface FiscalDocumentView {
@@ -48,11 +52,15 @@ export interface FiscalDocumentView {
   source: 'XML' | 'QR_CODE' | 'ACCESS_KEY';
   protocolStatus: number | null;
   warnings: string[];
+  signatureStatus: 'VALID' | 'MISSING' | 'INVALID' | null;
+  signatureDetails: SignatureDetails | null;
   verificationStatus: string;
   verificationReason: string | null;
   verifiedAt: string | null;
   items: { position: number; description: string; ncm: string | null; quantity: string | null; unit: string | null; totalCents: number }[];
 }
+
+type NormalizedItem = { position: number; description: string; ncm: string | null; cfop: string | null; unit: string | null; quantity: string | null; totalCents: number };
 
 const PRIORIDADE = { ACCESS_KEY: 0, QR_CODE: 1, XML: 2 } as const;
 
@@ -80,7 +88,7 @@ export class FiscalService {
     if (info.mimeType === 'application/xml') {
       const r = parseNfeXml(conteudo);
       if (!r.ok) throw new DomainError(`FISCAL_${r.error}`, XML_ERRORS[r.error] ?? 'XML não reconhecido');
-      return { kind: 'NFE_XML', parsed: r.value };
+      return { kind: 'NFE_XML', parsed: r.value, signature: verifyNfeSignature(conteudo.toString('utf8')) };
     }
     if (info.mimeType.startsWith('image/')) {
       const texto = await readQrCode(conteudo);
@@ -89,7 +97,16 @@ export class FiscalService {
       if (!qr.ok) return { kind: 'NONE', reason: 'O QR Code encontrado não é de uma NFC-e válida. Informe a chave de acesso.' };
       return { kind: 'NFCE_QR', qr: qr.value };
     }
-    return { kind: 'NONE', reason: 'PDF não é lido automaticamente. Informe a chave de acesso (44 dígitos) impressa no DANFE.' };
+    const texto = await pdfText(conteudo).catch(() => '');
+    const achado = findAccessKeys(texto);
+    if (achado.kind === 'FOUND') return { kind: 'PDF_KEY', accessKey: achado.accessKey };
+    if (achado.kind === 'AMBIGUOUS') return { kind: 'NONE', reason: `O PDF tem ${achado.count} chaves de acesso diferentes. Informe a chave desta nota.` };
+    return {
+      kind: 'NONE',
+      reason: texto.trim()
+        ? 'Não achei a chave de acesso no texto do PDF. Informe a chave (44 dígitos) impressa no DANFE.'
+        : 'O PDF não tem texto (parece escaneado). Informe a chave de acesso (44 dígitos) impressa no DANFE.',
+    };
   }
 
   /**
@@ -172,6 +189,8 @@ export class FiscalService {
           source: d.source as FiscalDocumentView['source'],
           protocolStatus: d.protocolStatus,
           warnings: d.warnings,
+          signatureStatus: d.signatureStatus as FiscalDocumentView['signatureStatus'],
+          signatureDetails: d.signatureDetails ?? null,
           verificationStatus: d.verificationStatus,
           verificationReason: d.verificationReason,
           verifiedAt: d.verifiedAt?.toISOString() ?? null,
@@ -239,33 +258,9 @@ export class FiscalService {
   }
 
   private normalize(input: { extraction: Exclude<Extraction, { kind: 'NONE' }> } | { accessKey: string; declaredTotalCents: number }) {
-    if ('accessKey' in input) {
-      const k = parseAccessKey(input.accessKey);
-      if (!k.ok) throw new DomainError('FISCAL_ACCESS_KEY_INVALID', 'Chave de acesso inválida: confira os 44 dígitos.', HttpStatus.UNPROCESSABLE_ENTITY, { error: k.error });
-      return {
-        accessKey: k.value.key,
-        doc: {
-          accessKey: k.value.key,
-          model: k.value.model,
-          uf: k.value.uf,
-          series: k.value.series,
-          number: k.value.number,
-          issuedAt: null,
-          environment: null,
-          issuerDocument: k.value.issuerDocument,
-          issuerName: null,
-          totalCents: null,
-          declaredTotalCents: input.declaredTotalCents,
-          source: 'ACCESS_KEY' as const,
-          protocolStatus: null,
-          protocolNumber: null,
-          protocolMessage: null,
-          warnings: [] as string[],
-        },
-        items: [],
-      };
-    }
+    if ('accessKey' in input) return this.keyOnly(input.accessKey, input.declaredTotalCents);
     const e = input.extraction;
+    if (e.kind === 'PDF_KEY') return this.keyOnly(e.accessKey, null);
     if (e.kind === 'NFCE_QR') {
       const k = e.qr.accessKey;
       return {
@@ -287,8 +282,10 @@ export class FiscalService {
           protocolNumber: null,
           protocolMessage: null,
           warnings: [] as string[],
+          signatureStatus: null,
+          signatureDetails: null,
         },
-        items: [],
+        items: [] as NormalizedItem[],
       };
     }
     const p = e.parsed;
@@ -311,8 +308,40 @@ export class FiscalService {
         protocolNumber: p.protocol?.number ?? null,
         protocolMessage: p.protocol?.message ?? null,
         warnings: p.warnings,
+        signatureStatus: e.signature.status,
+        signatureDetails: signatureDetails(e.signature) as SignatureDetails | null,
       },
-      items: p.items.map((i) => ({ position: i.position, description: i.description, ncm: i.ncm, cfop: i.cfop, unit: i.unit, quantity: i.quantity, totalCents: i.totalCents })),
+      items: p.items.map((i): NormalizedItem => ({ position: i.position, description: i.description, ncm: i.ncm, cfop: i.cfop, unit: i.unit, quantity: i.quantity, totalCents: i.totalCents })),
+    };
+  }
+
+  /** Só a chave (digitada ou lida do PDF): os campos vêm da própria chave. */
+  private keyOnly(chave: string, declarado: number | null) {
+    const k = parseAccessKey(chave);
+    if (!k.ok) throw new DomainError('FISCAL_ACCESS_KEY_INVALID', 'Chave de acesso inválida: confira os 44 dígitos.', HttpStatus.UNPROCESSABLE_ENTITY, { error: k.error });
+    return {
+      accessKey: k.value.key,
+      doc: {
+        accessKey: k.value.key,
+        model: k.value.model,
+        uf: k.value.uf,
+        series: k.value.series,
+        number: k.value.number,
+        issuedAt: null,
+        environment: null,
+        issuerDocument: k.value.issuerDocument,
+        issuerName: null,
+        totalCents: null,
+        declaredTotalCents: declarado,
+        source: 'ACCESS_KEY' as const,
+        protocolStatus: null,
+        protocolNumber: null,
+        protocolMessage: null,
+        warnings: [] as string[],
+        signatureStatus: null,
+        signatureDetails: null,
+      },
+      items: [] as NormalizedItem[],
     };
   }
 }

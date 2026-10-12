@@ -11,6 +11,8 @@ const fiscal = (over: Partial<FlagInput['fiscal'][number]> = {}): FlagInput['fis
   warnings: [],
   totalFromDocument: true,
   sharedWithOtherExpenses: false,
+  signatureStatus: 'VALID',
+  certificateProblems: 0,
   ...over,
 });
 
@@ -23,6 +25,8 @@ const base = (over: Partial<FlagInput> = {}): FlagInput => ({
   fiscal: [fiscal()],
   hasPaymentProof: true,
   duplicateFile: false,
+  similarImage: false,
+  suspiciousInstructions: false,
   ...over,
 });
 
@@ -41,9 +45,12 @@ describe('máquina de estados da despesa', () => {
     expect(expenseTransition('submit', 'APPROVED', 'organizer')).toEqual({ ok: false, error: 'INVALID_TRANSITION' });
   });
 
-  it('aprovada e recusada são finais para o organizador', () => {
+  it('aprovada é final; recusada só pode ser contestada, com justificativa', () => {
     expect(organizerActions('APPROVED')).toEqual([]);
-    expect(organizerActions('REJECTED')).toEqual([]);
+    expect(organizerActions('REJECTED')).toEqual(['appeal']);
+    expect(expenseTransition('appeal', 'REJECTED', 'organizer', 'A nota é de alimentos, veja os itens.')).toEqual({ ok: true, to: 'SUBMITTED' });
+    expect(expenseTransition('appeal', 'REJECTED', 'organizer', '')).toEqual({ ok: false, error: 'REASON_REQUIRED' });
+    expect(expenseTransition('appeal', 'APPROVED', 'organizer', 'x')).toEqual({ ok: false, error: 'INVALID_TRANSITION' });
     expect(organizerActions('DRAFT').sort()).toEqual(['cancel', 'submit']);
   });
 });
@@ -95,5 +102,17 @@ describe('alertas automáticos', () => {
 
   it('nota lida do QR Code não exige protocolo no XML', () => {
     expect(computeFlags(base({ fiscal: [fiscal({ source: 'QR_CODE', protocolStatus: null })] }))).toEqual([]);
+  });
+
+  it('assinatura do XML: ausente, inválida ou com certificado que não confere', () => {
+    expect(computeFlags(base({ fiscal: [fiscal({ signatureStatus: 'MISSING' })] }))).toEqual(['XML_SIGNATURE_MISSING']);
+    expect(computeFlags(base({ fiscal: [fiscal({ signatureStatus: 'INVALID' })] }))).toEqual(['XML_SIGNATURE_INVALID']);
+    expect(computeFlags(base({ fiscal: [fiscal({ certificateProblems: 1 })] }))).toEqual(['XML_SIGNATURE_CERTIFICATE']);
+    // Nota lida do QR ou da chave não tem assinatura para conferir.
+    expect(computeFlags(base({ fiscal: [fiscal({ source: 'QR_CODE', signatureStatus: null })] }))).toEqual([]);
+  });
+
+  it('imagem parecida com a de outra despesa e instruções embutidas', () => {
+    expect(computeFlags(base({ similarImage: true, suspiciousInstructions: true })).sort()).toEqual(['SIMILAR_IMAGE', 'SUSPICIOUS_INSTRUCTIONS']);
   });
 });

@@ -101,11 +101,19 @@ Ficou para depois: `organizations`/`beneficiaries` (campanhas de ONG) e hash
 perceptual de imagem (hoje a duplicidade é por SHA-256 do arquivo e pela chave
 de acesso).
 
-### Fase 3 — risco e IA (planejado)
+### Fase 3 — risco e IA (migração 0004)
 
-`ai_analyses` (modelo, versão do prompt, tokens, custo, latência, saída
-validada), `fraud_signals` (regra, severidade, evidência), `risk_reviews`,
-`disputes`, `notifications`, `ai_budget_usage`.
+| Tabela / coluna | Conteúdo | Restrições |
+|---|---|---|
+| `ai_calls` | purpose, subject, provider, model, prompt_version, status (`OK`,`INVALID_OUTPUT`,`ERROR`), tokens, cost_millicents, latency_ms, error | **só inserção**; base do orçamento mensal (fuso America/Sao_Paulo) |
+| `expense_analyses` | expense_id, expense_version, trigger, source_event_id, ruleset_version, risk_score/level/factors, suspicious_instructions, ai_status/provider/model, prompt_version, ai_output, input_sha256 | **só inserção**; `UNIQUE(source_event_id)` parcial (reentrega não repete a IA) |
+| `expenses` + | risk_score, risk_level (projeção da última análise), rejected_by, appeal_reason, appealed_at | contestação: ambos nulos ou ambos preenchidos |
+| `fiscal_documents` + | signature_status (`VALID`,`MISSING`,`INVALID`), signature_details | só XML |
+| `stored_files` + | perceptual_hash (dHash, 16 hex) | só imagens de comprovantes; comparação com `bit_count(... # ...)` |
+
+Contestação reabre uma despesa recusada: como a recusa liberou a parte das
+notas, `appeal` trava cada nota e confere de novo o limite do rateio antes de
+voltar a contar (a constraint trigger só dispara em `expense_documents`).
 
 ## Quem garante cada invariante
 

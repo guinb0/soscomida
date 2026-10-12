@@ -1,6 +1,6 @@
-import { ASSESSMENTS, EXPENSE_DOCUMENT_KINDS, EXPENSE_STATUSES, type ExpenseFlag } from '@soscomida/contracts';
+import { AI_STATUSES, ASSESSMENTS, type AdherenceOutput, EXPENSE_DOCUMENT_KINDS, EXPENSE_STATUSES, type ExpenseFlag } from '@soscomida/contracts';
 import { sql } from 'drizzle-orm';
-import { bigint, check, date, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { bigint, check, date, index, integer, jsonb, pgTable, smallint, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { campaigns } from '../../campaigns/infra/campaigns.schema';
 import { fiscalDocuments } from '../../fiscal/infra/fiscal.schema';
 import { users } from '../../identity/infra/identity.schema';
@@ -40,6 +40,14 @@ export const expenses = pgTable(
     submittedAt: timestamp('submitted_at', { withTimezone: true }),
     decidedAt: timestamp('decided_at', { withTimezone: true }),
     decisionReason: text('decision_reason'),
+    /** Quem recusou: não pode revisar a contestação. */
+    rejectedBy: uuid('rejected_by').references(() => users.id),
+    /** Contestação da recusa pelo organizador (uma por despesa). */
+    appealReason: text('appeal_reason'),
+    appealedAt: timestamp('appealed_at', { withTimezone: true }),
+    /** Projeção da última análise (expense_analyses), para ordenar a fila. */
+    riskScore: smallint('risk_score'),
+    riskLevel: text('risk_level'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -50,6 +58,8 @@ export const expenses = pgTable(
     check('expenses_amount_positive', sql`${t.amountCents} > 0`),
     check('expenses_payment_proof_check', sql`${t.paymentProof} in (${lista(ASSESSMENTS)})`),
     check('expenses_delivery_check', sql`${t.delivery} in (${lista(ASSESSMENTS)})`),
+    check('expenses_risk_check', sql`(${t.riskScore} is null and ${t.riskLevel} is null) or (${t.riskScore} between 0 and 100 and ${t.riskLevel} in ('LOW', 'MEDIUM', 'HIGH'))`),
+    check('expenses_appeal_check', sql`(${t.appealedAt} is null) = (${t.appealReason} is null)`),
   ],
 );
 
@@ -106,4 +116,45 @@ export const expenseStatusHistory = pgTable(
     occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('expense_status_history_expense_idx').on(t.expenseId, t.occurredAt)],
+);
+
+/**
+ * Análise automática de uma despesa: regras determinísticas + (se houver)
+ * recomendação da IA. Uma linha por análise; só inserção. O custo da IA fica
+ * em ai_calls. Nada aqui decide: orienta a revisão humana.
+ */
+export const expenseAnalyses = pgTable(
+  'expense_analyses',
+  {
+    id: uuid('id').primaryKey(),
+    expenseId: uuid('expense_id')
+      .notNull()
+      .references(() => expenses.id),
+    expenseVersion: integer('expense_version').notNull(),
+    trigger: text('trigger').notNull(),
+    /** Evento do outbox que pediu a análise: entrega repetida não paga a IA de novo. */
+    sourceEventId: uuid('source_event_id'),
+    requestedBy: uuid('requested_by').references(() => users.id),
+    rulesetVersion: text('ruleset_version').notNull(),
+    riskScore: smallint('risk_score').notNull(),
+    riskLevel: text('risk_level').notNull(),
+    riskFactors: jsonb('risk_factors').$type<{ code: string; label: string; points: number; source: 'RULE' | 'FISCAL' | 'AI' }[]>().notNull(),
+    suspiciousInstructions: jsonb('suspicious_instructions').$type<{ code: string; excerpt: string }[]>().notNull(),
+    aiStatus: text('ai_status').notNull(),
+    aiProvider: text('ai_provider').notNull(),
+    aiModel: text('ai_model'),
+    promptVersion: text('prompt_version').notNull(),
+    aiOutput: jsonb('ai_output').$type<AdherenceOutput>(),
+    aiDetail: text('ai_detail'),
+    /** SHA-256 dos dados enviados à IA (o conteúdo não é guardado de novo). */
+    inputSha256: text('input_sha256').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('expense_analyses_expense_idx').on(t.expenseId, t.createdAt),
+    uniqueIndex('expense_analyses_event').on(t.sourceEventId).where(sql`${t.sourceEventId} is not null`),
+    check('expense_analyses_trigger_check', sql`${t.trigger} in ('SUBMITTED', 'MANUAL')`),
+    check('expense_analyses_level_check', sql`${t.riskLevel} in ('LOW', 'MEDIUM', 'HIGH')`),
+    check('expense_analyses_ai_status_check', sql`${t.aiStatus} in (${lista(AI_STATUSES)})`),
+  ],
 );

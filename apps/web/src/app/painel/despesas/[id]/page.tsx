@@ -11,7 +11,7 @@ import { ExpenseFlags, ExpenseSeals, ExpenseStatusBadge } from '@/components/exp
 import { ExpenseDocuments } from '@/components/expense-documents';
 import { ExpenseForm, toExpenseFormDefaults } from '@/components/expense-form';
 import { RequireSession } from '@/components/require-session';
-import { Alert, Button, Card, Container, PageTitle, Skeleton } from '@/components/ui';
+import { Alert, Button, Card, Container, Label, PageTitle, Skeleton, Textarea } from '@/components/ui';
 import { ApiClientError, api, errorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 
@@ -26,6 +26,7 @@ function Despesa({ id }: { id: string }) {
   const { data: e, isLoading, error } = useQuery({ queryKey: chave, queryFn: () => api<OwnedExpense>(`/me/expenses/${id}`) });
   const [erro, setErro] = useState<string | null>(null);
   const [agindo, setAgindo] = useState(false);
+  const [contestacao, setContestacao] = useState('');
 
   if (isLoading) return <Container className="py-10"><Skeleton className="h-96" /></Container>;
   if (error || !e) return <Container className="py-10"><Alert tone="danger">{errorMessage(error)}</Alert></Container>;
@@ -48,6 +49,20 @@ function Despesa({ id }: { id: string }) {
     }
   };
 
+  const contestar = async () => {
+    setErro(null);
+    setAgindo(true);
+    try {
+      atualizar(await api<OwnedExpense>(`/me/expenses/${e.id}/appeal`, { method: 'POST', json: { version: e.version, reason: contestacao } }));
+      setContestacao('');
+    } catch (err) {
+      if (err instanceof ApiClientError && err.code === 'VERSION_CONFLICT') await client.invalidateQueries({ queryKey: chave });
+      setErro(errorMessage(err));
+    } finally {
+      setAgindo(false);
+    }
+  };
+
   return (
     <Container className="py-10">
       <Link href={`/painel/campanhas/${e.campaignId}/despesas`} className="mb-4 inline-flex items-center gap-1 text-sm font-bold text-sky-700 hover:underline">
@@ -60,6 +75,13 @@ function Despesa({ id }: { id: string }) {
         </span>
       </div>
       <PageTitle title={e.description} subtitle={`${e.supplierName} · ${formatBrl(e.amountCents)}`} />
+
+      {e.appeal && (
+        <Alert tone="sky" title="Contestação enviada" className="mb-6">
+          {e.appeal.reason}
+          <span className="mt-1 block text-xs">Outra pessoa da revisão vai analisar (não quem recusou). A contestação só pode ser feita uma vez.</span>
+        </Alert>
+      )}
 
       {e.decisionReason && (
         <Alert tone={e.status === 'APPROVED' ? 'success' : e.status === 'REJECTED' ? 'danger' : 'sun'} title="Mensagem da revisão" className="mb-6">
@@ -112,7 +134,24 @@ function Despesa({ id }: { id: string }) {
                 Retirar da revisão
               </Button>
             )}
-            {['IN_REVIEW', 'APPROVED', 'REJECTED', 'CANCELLED'].includes(e.status) && <p className="text-sm text-ink-600">Nenhuma ação disponível neste status.</p>}
+            {e.status === 'REJECTED' && !e.appeal && (
+              <div className="space-y-2">
+                <Label htmlFor="contestacao">Contestar a recusa (uma vez)</Label>
+                <Textarea
+                  id="contestacao"
+                  value={contestacao}
+                  onChange={(ev) => setContestacao(ev.target.value)}
+                  placeholder="Explique por que a decisão deve ser revista e que evidências você tem."
+                />
+                <Button className="w-full" loading={agindo} disabled={contestacao.trim().length < 20} onClick={() => void contestar()}>
+                  Enviar contestação
+                </Button>
+                <p className="text-xs text-ink-500">Mínimo de 20 caracteres. A despesa volta para a fila e outra pessoa da revisão decide.</p>
+              </div>
+            )}
+            {(['IN_REVIEW', 'APPROVED', 'CANCELLED'].includes(e.status) || (e.status === 'REJECTED' && e.appeal)) && (
+              <p className="text-sm text-ink-600">Nenhuma ação disponível neste status.</p>
+            )}
             {erro && <Alert tone="danger">{erro}</Alert>}
           </Card>
         </aside>

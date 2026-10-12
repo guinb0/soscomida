@@ -57,6 +57,18 @@ export const metrics = {
     labelNames: ['type'],
     registers: [registry],
   }),
+  aiCalls: new Counter({
+    name: 'ai_calls_total',
+    help: 'Chamadas ao provedor de IA',
+    labelNames: ['provider', 'purpose', 'status'],
+    registers: [registry],
+  }),
+  aiCostMillicents: new Counter({
+    name: 'ai_cost_millicents_total',
+    help: 'Custo estimado das chamadas de IA (milésimos de centavo de real)',
+    labelNames: ['provider', 'purpose'],
+    registers: [registry],
+  }),
 };
 
 @Injectable()

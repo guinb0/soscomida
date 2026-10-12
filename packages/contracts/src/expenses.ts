@@ -67,6 +67,11 @@ export const EXPENSE_FLAGS = [
   'FISCAL_WARNINGS',
   'FISCAL_TOTAL_DECLARED',
   'NO_PAYMENT_PROOF',
+  'XML_SIGNATURE_MISSING',
+  'XML_SIGNATURE_INVALID',
+  'XML_SIGNATURE_CERTIFICATE',
+  'SIMILAR_IMAGE',
+  'SUSPICIOUS_INSTRUCTIONS',
 ] as const;
 export const expenseFlagSchema = z.enum(EXPENSE_FLAGS);
 export type ExpenseFlag = z.infer<typeof expenseFlagSchema>;
@@ -84,6 +89,11 @@ export const EXPENSE_FLAG_LABELS: Record<ExpenseFlag, string> = {
   FISCAL_WARNINGS: 'Incoerências internas na nota (campos x chave de acesso)',
   FISCAL_TOTAL_DECLARED: 'Total da nota informado pelo organizador (não lido do documento)',
   NO_PAYMENT_PROOF: 'Sem comprovante de pagamento',
+  XML_SIGNATURE_MISSING: 'XML sem assinatura digital do emitente',
+  XML_SIGNATURE_INVALID: 'Assinatura digital do XML inválida: arquivo alterado ou montado',
+  XML_SIGNATURE_CERTIFICATE: 'Certificado da assinatura não confere (CNPJ, validade ou autoassinado)',
+  SIMILAR_IMAGE: 'Imagem muito parecida com outra já usada em outra despesa',
+  SUSPICIOUS_INSTRUCTIONS: 'Texto com ordens para o sistema ou para a revisão (possível manipulação)',
 };
 
 const supplierDocumentSchema = z
@@ -163,6 +173,8 @@ const fiscalDocumentSchema = z.object({
   source: z.enum(['XML', 'QR_CODE', 'ACCESS_KEY']),
   verificationStatus: z.string(),
   verificationReason: z.string().nullable(),
+  /** Assinatura XMLDSig do emitente (só XML). */
+  signature: z.object({ status: z.enum(['VALID', 'MISSING', 'INVALID']), problems: z.array(z.string()), certificateSubject: z.string().nullable() }).nullable(),
   items: z.array(z.object({ description: z.string(), quantity: z.string().nullable(), unit: z.string().nullable(), totalCents: centsSchema })),
 });
 
@@ -195,17 +207,102 @@ export const ownedExpenseSchema = z.object({
   delivery: assessmentSchema,
   flags: z.array(expenseFlagSchema),
   decisionReason: z.string().nullable(),
+  /** Contestação de uma recusa (uma por despesa). */
+  appeal: z.object({ reason: z.string(), at: z.string() }).nullable(),
   documents: z.array(expenseDocumentSchema),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 export type OwnedExpense = z.infer<typeof ownedExpenseSchema>;
 
+// --- Análise automática (Fase 3) ---------------------------------------------
+
+export const ADHERENCE_CLASSIFICATIONS = ['COMPATIBLE', 'POSSIBLY_COMPATIBLE', 'INCOMPATIBLE', 'INSUFFICIENT_EVIDENCE', 'REQUIRES_HUMAN_REVIEW'] as const;
+export type AdherenceClassification = (typeof ADHERENCE_CLASSIFICATIONS)[number];
+export const ADHERENCE_LABELS: Record<AdherenceClassification, string> = {
+  COMPATIBLE: 'Compatível com a finalidade',
+  POSSIBLY_COMPATIBLE: 'Possivelmente compatível',
+  INCOMPATIBLE: 'Incompatível com a finalidade',
+  INSUFFICIENT_EVIDENCE: 'Evidência insuficiente',
+  REQUIRES_HUMAN_REVIEW: 'Precisa de análise humana',
+};
+
+export const ADHERENCE_ISSUE_CODES = [
+  'ITEM_FORA_DA_FINALIDADE',
+  'VALOR_INCOMPATIVEL',
+  'QUANTIDADE_ATIPICA',
+  'FORNECEDOR_INCOMPATIVEL',
+  'DESCRICAO_DIVERGENTE_DOS_ITENS',
+  'PROMPT_INJECTION_SUSPECT',
+  'OUTRO',
+] as const;
+
+/** Saída exigida do modelo (validada; inválida duas vezes = revisão humana). */
+export const adherenceOutputSchema = z.object({
+  classification: z.enum(ADHERENCE_CLASSIFICATIONS),
+  riskLevel: z.enum(['LOW', 'MEDIUM', 'HIGH']),
+  purposeAlignment: z.number().min(0).max(1),
+  detectedIssues: z
+    .array(z.object({ code: z.enum(ADHERENCE_ISSUE_CODES).catch('OUTRO'), item: z.string().max(200).nullable().optional(), detail: z.string().max(500) }))
+    .max(20),
+  supportingEvidence: z.array(z.string().max(300)).max(10),
+  missingEvidence: z.array(z.string().max(300)).max(10),
+  recommendation: z.enum(['APPROVE', 'REVIEW', 'REJECT_SUGGESTED']),
+  explanation: z.string().min(1).max(1200),
+});
+export type AdherenceOutput = z.infer<typeof adherenceOutputSchema>;
+
+export const AI_STATUSES = ['COMPLETED', 'NO_PROVIDER', 'BUDGET_EXHAUSTED', 'INVALID_OUTPUT', 'PROVIDER_ERROR'] as const;
+export type AiStatus = (typeof AI_STATUSES)[number];
+export const AI_STATUS_LABELS: Record<AiStatus, string> = {
+  COMPLETED: 'Análise de IA concluída',
+  NO_PROVIDER: 'IA não configurada: só regras automáticas',
+  BUDGET_EXHAUSTED: 'Orçamento de IA do mês esgotado: só regras automáticas',
+  INVALID_OUTPUT: 'A IA respondeu fora do formato duas vezes: só regras automáticas',
+  PROVIDER_ERROR: 'Provedor de IA indisponível: só regras automáticas',
+};
+
+export const RISK_LEVELS = ['LOW', 'MEDIUM', 'HIGH'] as const;
+export type RiskLevel = (typeof RISK_LEVELS)[number];
+export const RISK_LEVEL_LABELS: Record<RiskLevel, string> = { LOW: 'Risco baixo', MEDIUM: 'Risco médio', HIGH: 'Risco alto' };
+
+export const riskFactorSchema = z.object({ code: z.string(), label: z.string(), points: z.number().int(), source: z.enum(['RULE', 'FISCAL', 'AI']) });
+
+export const expenseAnalysisSchema = z.object({
+  id: uuidSchema,
+  createdAt: z.string(),
+  trigger: z.enum(['SUBMITTED', 'MANUAL']),
+  expenseVersion: z.number().int(),
+  rulesetVersion: z.string(),
+  risk: z.object({ score: z.number().int().min(0).max(100), level: z.enum(RISK_LEVELS), factors: z.array(riskFactorSchema) }),
+  ai: z.object({
+    status: z.enum(AI_STATUSES),
+    provider: z.string(),
+    model: z.string().nullable(),
+    promptVersion: z.string(),
+    /** true quando o "modelo" é o simulador local de desenvolvimento. */
+    simulated: z.boolean(),
+    output: adherenceOutputSchema.nullable(),
+    detail: z.string().nullable(),
+  }),
+  suspiciousInstructions: z.array(z.object({ code: z.string(), excerpt: z.string() })),
+});
+export type ExpenseAnalysis = z.infer<typeof expenseAnalysisSchema>;
+
+export const appealInputSchema = z.object({
+  version: z.number().int(),
+  reason: z.string().trim().min(20, 'Explique em pelo menos 20 caracteres por que a decisão deve ser revista').max(2000),
+});
+export type AppealInput = z.infer<typeof appealInputSchema>;
+
 export const moderationExpenseSchema = ownedExpenseSchema.extend({
   campaign: z.object({ id: uuidSchema, title: z.string(), slug: z.string() }),
   organizerName: z.string(),
   reviewerId: uuidSchema.nullable(),
   budgetSituation: z.object({ plannedCents: centsSchema, committedCents: centsSchema }),
+  /** Quem recusou antes da contestação não revisa de novo. */
+  rejectedBy: uuidSchema.nullable(),
+  analysis: expenseAnalysisSchema.nullable(),
 });
 export type ModerationExpense = z.infer<typeof moderationExpenseSchema>;
 
@@ -217,6 +314,9 @@ export const expenseQueueItemSchema = z.object({
   status: expenseStatusSchema,
   flags: z.array(expenseFlagSchema),
   submittedAt: z.string().nullable(),
+  riskScore: z.number().int().nullable(),
+  riskLevel: z.enum(RISK_LEVELS).nullable(),
+  appealed: z.boolean(),
 });
 export type ExpenseQueueItem = z.infer<typeof expenseQueueItemSchema>;
 
@@ -234,6 +334,8 @@ export const publicExpenseSchema = z.object({
   paymentProof: assessmentSchema,
   delivery: assessmentSchema,
   decisionReason: z.string().nullable(),
+  /** A recusa foi contestada pelo organizador e está em nova revisão. */
+  appealed: z.boolean(),
   fiscalDocuments: z.array(fiscalDocumentSchema.omit({ id: true, verificationReason: true })),
 });
 export type PublicExpense = z.infer<typeof publicExpenseSchema>;

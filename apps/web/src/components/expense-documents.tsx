@@ -14,6 +14,7 @@ import { ExternalLink, FileText, Trash2, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { ApiClientError, api, errorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
+import { SignatureLine } from './expense-badges';
 import { Alert, Badge, Button, Input, Label, Select, Textarea } from './ui';
 
 const ACEITOS = 'application/xml,text/xml,.xml,application/pdf,image/jpeg,image/png,image/webp';
@@ -213,8 +214,9 @@ function DadosFiscais({ expense, doc, editavel, onChange }: { expense: OwnedExpe
         <Badge tone={verificacao === 'AUTHORIZED' ? 'success' : ['CANCELLED', 'NOT_FOUND', 'DIVERGENT'].includes(verificacao) ? 'danger' : 'neutral'}>
           {FISCAL_CHECK_LABELS[verificacao]}
         </Badge>
-        <span className="text-xs text-ink-500">Lida de: {f.source === 'XML' ? 'XML' : f.source === 'QR_CODE' ? 'QR Code' : 'chave digitada'}</span>
+        <span className="text-xs text-ink-500">Lida de: {f.source === 'XML' ? 'XML' : f.source === 'QR_CODE' ? 'QR Code' : 'chave de acesso'}</span>
       </p>
+      {f.signature && <SignatureLine signature={f.signature} />}
       {f.items.length > 0 && (
         <details>
           <summary className="cursor-pointer text-sky-700">{f.items.length} itens lidos da nota</summary>

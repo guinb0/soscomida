@@ -1,7 +1,9 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
+  type AppealInput,
   type AttachDocumentInput,
+  type ExpenseAnalysis,
   type ExpenseInput,
   type ExpenseQueueItem,
   type ExpenseReviewDecision,
@@ -10,7 +12,9 @@ import {
   type OwnedExpense,
   type PublicExpense,
   type UpdateExpenseInput,
+  appealInputSchema,
   attachDocumentInputSchema,
+  expenseAnalysisSchema,
   expenseActionInputSchema,
   expenseInputSchema,
   expenseReviewDecisionSchema,
@@ -23,7 +27,9 @@ import {
 import { z } from 'zod';
 import { Public } from '../../infra/http/decorators';
 import { ApiZodBody, ApiZodResponse, ZodPipe } from '../../infra/http/zod';
+import { AiService } from '../ai';
 import { type AuthContext, CurrentUser, Roles } from '../identity';
+import { ExpenseAnalysisService } from './expense-analysis.service';
 import { ExpensesService } from './expenses.service';
 
 const ORGANIZER_ACTIONS = ['submit', 'withdraw', 'cancel'] as const;
@@ -126,23 +132,52 @@ export class OrganizerExpensesController {
   ): Promise<OwnedExpense> {
     return this.expenses.organizerAction(auth, id, action, input.version, input.reason);
   }
+
+  /** Contesta uma recusa (uma vez). Outra pessoa da revisão analisa. */
+  @Post('me/expenses/:id/appeal')
+  @HttpCode(200)
+  @ApiZodBody(appealInputSchema)
+  @ApiZodResponse(ownedExpenseSchema)
+  appeal(@CurrentUser() auth: AuthContext, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(appealInputSchema)) input: AppealInput): Promise<OwnedExpense> {
+    return this.expenses.appeal(auth, id, input);
+  }
 }
 
 @ApiTags('despesas (revisão)')
 @Controller('moderation/expenses')
 @Roles('moderator', 'admin')
 export class ReviewExpensesController {
-  constructor(private readonly expenses: ExpensesService) {}
+  constructor(
+    private readonly expenses: ExpensesService,
+    private readonly analysis: ExpenseAnalysisService,
+    private readonly ai: AiService,
+  ) {}
 
   @Get()
   queue(): Promise<ExpenseQueueItem[]> {
     return this.expenses.queue();
   }
 
+  /** Quanto do orçamento mensal de IA já foi usado. */
+  @Get('ai-budget')
+  aiBudget() {
+    return this.ai.budget();
+  }
+
   @Get(':id')
   @ApiZodResponse(moderationExpenseSchema)
-  get(@Param('id', ParseUUIDPipe) id: string): Promise<ModerationExpense> {
-    return this.expenses.getForReview(id);
+  async get(@Param('id', ParseUUIDPipe) id: string): Promise<ModerationExpense> {
+    const [despesa, analise] = await Promise.all([this.expenses.getForReview(id), this.analysis.latest(id)]);
+    return { ...despesa, analysis: analise };
+  }
+
+  /** Refaz a análise automática (ex.: depois de a nota ser verificada). */
+  @Post(':id/analysis')
+  @HttpCode(200)
+  @ApiZodResponse(expenseAnalysisSchema)
+  async reanalyze(@CurrentUser() auth: AuthContext, @Param('id', ParseUUIDPipe) id: string): Promise<ExpenseAnalysis> {
+    await this.expenses.getForReview(id);
+    return this.analysis.analyze(id, 'MANUAL', { requestedBy: auth.userId });
   }
 
   @Post(':id/claim')

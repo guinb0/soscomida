@@ -127,9 +127,8 @@ está em `index.ts` (fachada). Fases indicam quando o módulo ganha código.
 | `organizations` | ONGs e membros | 2 |
 | `expenses` | despesas, documentos anexados, rateio, alertas, revisão | 2 (feito) |
 | `fiscal` | leitura de XML/QR, documento único por chave, itens, tentativas de verificação e provedores | 2 (feito; OCR na 3) |
-| `fraud-detection` | sinais, regras, score | 3 |
-| `ai-analysis` | análise semântica de aderência | 3 |
-| `disputes` | contestação e recursos | 3 |
+| `ai` | porta única para IA: provedores, validação, orçamento, registro de chamadas, pré-filtro de injeção | 3 (feito) |
+| `expenses` (Fase 3) | regras de risco, análise de aderência, fila por risco, contestação | 3 (feito, dentro de `expenses`) |
 | `notifications` | e-mails disparados por eventos (doação confirmada, decisões da moderação) | 1 |
 | `web-cache` | avisa o site para expirar o cache das páginas públicas quando a campanha muda | 1 |
 | `administration` | configurações, políticas de risco | 3 |

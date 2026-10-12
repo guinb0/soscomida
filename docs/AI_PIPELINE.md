@@ -1,7 +1,23 @@
 # Pipeline de IA
 
-> Estado: **planejado para a Fase 3.** Nada de IA roda nas Fases 0–2, exceto,
-> opcionalmente, extração multimodal como último recurso na Fase 2.
+> Estado (2026-10-12): **implementado na Fase 3, sem nenhuma chamada a
+> provedor real.** O fluxo inteiro roda com o provedor `simulated` (regras de
+> palavras-chave, só dev/test) e o adaptador real foi testado contra um
+> servidor local que imita a API. Ligar um modelo de verdade custa dinheiro e
+> manda dados para fora: depende de autorização (ver "Como ligar").
+>
+> | Parte | Onde | Situação |
+> |---|---|---|
+> | Porta única para IA (`AiService`): validação Zod, 1 nova tentativa, registro de cada chamada, orçamento mensal | `modules/ai` | feito |
+> | Adaptador Chat Completions (OpenAI, OpenRouter, Mistral) | `ai/infra/openai-compatible.provider.ts` | feito, **não executado contra provedor real** |
+> | Provedor simulado (dev/test; proibido em produção) | `ai/infra/simulated.provider.ts` | feito |
+> | Pré-filtro determinístico de prompt injection | `ai/domain/injection.ts` | feito (vira alerta `SUSPICIOUS_INSTRUCTIONS`) |
+> | Análise de aderência (prompt `aderencia-v1`) | `expenses/domain/adherence.ts` | feito |
+> | Motor de risco com pontuação versionada (`risco-v1`) | `expenses/domain/risk.ts` | feito |
+> | Fila de revisão por risco, painel da análise, reanálise manual | `expenses` + `/moderacao/despesas` | feito |
+> | Contestação (uma por despesa, outra pessoa revisa) | `ExpensesService.appeal` | feito |
+> | Avaliação automatizada | `expenses/domain/adherence-eval.ts` + `pnpm --filter @soscomida/api ai-eval` | feito; **só rodada com o simulador** |
+> | OCR de foto sem QR / IA multimodal | — | **não feito** (decisão abaixo) |
 
 ## Onde a IA entra (e onde não)
 
@@ -85,3 +101,58 @@ sintéticos) com o rótulo esperado. Métricas por versão de prompt/modelo:
 precisão, falsos positivos/negativos de `INCOMPATIBLE`, custo e latência
 médios e taxa de revisão humana. Trocar modelo ou prompt exige rodar a
 avaliação e registrar o resultado.
+
+## Como funciona hoje
+
+1. A despesa entra na fila (envio ou contestação) → evento `ExpenseStatusChanged`
+   → o worker roda `ExpenseAnalysisService.analyze`. Entrega repetida do mesmo
+   evento não chama a IA de novo (`source_event_id` único).
+2. Alertas determinísticos são recalculados (inclui assinatura do XML, imagem
+   parecida por hash perceptual e instruções embutidas).
+3. Os dados do caso são montados com minimização (sem nomes de pessoas, CPF,
+   chave de acesso ou arquivos; fornecedor pessoa física vai sem nome) e
+   enviados como JSON numa mensagem separada, marcada como não confiável.
+4. Saída validada; inválida duas vezes, provedor fora do ar, orçamento
+   esgotado ou IA desligada → a análise fica só com as regras e o motivo é
+   mostrado. Nunca há aprovação por omissão.
+5. Risco = soma de pontos das regras + da IA (a IA só soma, nunca reduz),
+   teto 100; ≥ 50 alto, ≥ 20 médio. Sinais "duros" (nota cancelada/não
+   encontrada/divergente, assinatura inválida, arquivo duplicado, nota de
+   homologação) = alto direto. IA recomendando aprovar com regras em risco
+   alto fica marcado como divergência.
+6. A análise vai para `expense_analyses` (só inserção) e o risco é projetado em
+   `expenses.risk_score` para ordenar a fila. Organizador e público **não**
+   veem a análise.
+
+## Como ligar um provedor real (precisa de autorização)
+
+```
+AI_PROVIDER=openai_compatible
+AI_BASE_URL=https://api.openai.com/v1      # ou https://openrouter.ai/api/v1, https://api.mistral.ai/v1
+AI_API_KEY=...
+AI_MODEL=...
+AI_INPUT_PRICE_CENTS_PER_MTOK=...          # preço em centavos de real por milhão de tokens
+AI_OUTPUT_PRICE_CENTS_PER_MTOK=...
+AI_MONTHLY_BUDGET_CENTS=5000               # obrigatório (> 0)
+```
+
+Depois: `pnpm --filter @soscomida/api build && pnpm --filter @soscomida/api ai-eval`
+(16 casos sintéticos, custo de centavos) e registrar o resultado aqui.
+
+Antes de produção: base legal e contrato de tratamento de dados com o
+provedor (transferência internacional, LGPD art. 33) — **pendente jurídico**.
+
+## Resultados de avaliação
+
+| Data | Provedor / modelo | Prompt | Acerto | Falsos negativos | Falsos positivos | Injeções | Observação |
+|---|---|---|---|---|---|---|---|
+| 2026-10-12 | simulated (regras locais) | aderencia-v1 | 16/16 | 0 | 0 | 2/2 | **Não mede qualidade**: as regras do simulador foram escritas junto com os casos. Só prova que o harness funciona. |
+
+## OCR de foto sem QR Code (decisão pendente)
+
+Hoje: XML (lido), foto com QR (lida), PDF com camada de texto (chave lida),
+foto sem QR e PDF escaneado → o organizador digita a chave. Opções para a
+foto sem QR: Tesseract local (grátis, fraco em cupom térmico) ou IA
+multimodal pelo mesmo `AiService` (melhor, custa por imagem e envia a foto,
+que pode ter dados pessoais, para fora). Recomendação: só ligar depois de
+medir quantas despesas chegam assim.

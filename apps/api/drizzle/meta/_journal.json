@@ -29,6 +29,13 @@
       "when": 1791761485065,
       "tag": "0003_prestacao_de_contas",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791820621331,
+      "tag": "0004_ia_antifraude",
+      "breakpoints": true
     }
   ]
 }
