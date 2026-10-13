@@ -45,7 +45,11 @@ test('organizadora presta contas com XML e comprovante; revisão aprova; públic
   await mod.goto('/moderacao/despesas');
   await mod.getByRole('link', { name: 'Arroz e feijão para as cestas' }).first().click();
   await mod.getByRole('button', { name: 'Assumir revisão' }).click();
-  await expect(mod.getByText('Nota autenticada no fisco').first()).toBeVisible({ timeout: 30_000 });
+  // A consulta ao fisco roda no worker (outbox); a tela não se atualiza sozinha.
+  await expect(async () => {
+    await mod.reload();
+    await expect(mod.getByText('Nota autenticada no fisco').first()).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 45_000 });
   await mod.getByLabel('Comprovante de pagamento').selectOption('ACCEPTED');
   await mod.getByLabel(/Justificativa/).fill('Nota autenticada, itens compatíveis com as cestas e pagamento conferido.');
   await mod.screenshot({ fullPage: true, path: testInfo.outputPath('revisao-moderadora.png') });
