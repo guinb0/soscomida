@@ -229,7 +229,7 @@ export class StorageService implements OnModuleInit {
   }
 
   /**
-   * Imagens validadas visualmente parecidas (dHash a até
+   * Imagens validadas visualmente parecidas (pHash a até
    * SIMILAR_IMAGE_MAX_DISTANCE bits) com alguma das informadas, exceto elas
    * mesmas e as de conteúdo idêntico (essas o SHA-256 já pega).
    */

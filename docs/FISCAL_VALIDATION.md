@@ -9,7 +9,7 @@
 > | PDF com camada de texto (DANFE do emissor) | Fase 3: chave lida do texto (`infra/pdf-text.ts`, unpdf), validada pelo DV; o total é informado pelo organizador |
 > | PDF escaneado / foto sem QR | OCR local (Tesseract) procura a chave; se achar, o organizador confere e informa o total; se não, digita a chave |
 > | OCR e IA multimodal | **não feito** (Fase 3) |
-> | Antiduplicidade | chave única + SHA-256 do arquivo + hash perceptual (dHash 64 bits, distância ≤ 6) de imagens — Fase 3 |
+> | Antiduplicidade | chave única + SHA-256 do arquivo + hash perceptual (pHash/DCT 64 bits, distância ≤ 8) de imagens — Fase 3 |
 > | Rateio com limite | feito (lock + constraint trigger) |
 > | `FiscalVerificationProvider` | interface + `none` (padrão: UNVERIFIABLE/NO_INTEGRATION) + `dev` (simulado, proibido fora de dev/test). **Nenhuma consulta oficial real**: depende de certificado ICP-Brasil |
 > | Assinatura digital do XML (XMLDSig) | Fase 3: verificada (`domain/xml-signature.ts`, xml-crypto). Detecta XML editado depois de assinado e ataque de embrulho; confere o trecho assinado com o lido; CNPJ do certificado × emitente, validade na emissão e autoassinatura. **Cadeia ICP-Brasil validada** até as raízes v5/v6/v10/v11/v12 (pacote oficial do ITI em `apps/api/assets/icp-brasil`; v7 fora por algoritmo não suportado), com validade de cada AC na data de emissão. Revogação conferida pela LCR da AC emissora (`infra/revocation.ts`; assinatura da LCR verificada, cache até a próxima atualização; LCR indisponível = "não verificada", nunca "válida"; revogação depois da emissão não invalida). Testado com as LCRs reais das raízes (`scripts/verificar-lcr-real.ts`). Assinatura íntegra e ICP-Brasil prova quem assinou, não que a nota está autorizada no fisco |

@@ -12,7 +12,7 @@ async function cupom(linhas: number[], largura = 600): Promise<Buffer> {
   return sharp(Buffer.from(svg)).resize(largura, altura).jpeg({ quality: 92 }).toBuffer();
 }
 
-describe('hash perceptual (dHash)', () => {
+describe('hash perceptual (pHash)', () => {
   it('a mesma foto recomprimida e reduzida fica a poucos bits de distância', async () => {
     const original = await cupom([60, 110, 160, 260, 300, 420, 470, 560, 620]);
     const recomprimida = await sharp(original).resize(300).jpeg({ quality: 35 }).toBuffer();
@@ -26,6 +26,24 @@ describe('hash perceptual (dHash)', () => {
     const a = await perceptualHash(await cupom([60, 110, 160, 260, 300, 420, 470, 560, 620]));
     const b = await perceptualHash(await cupom([30, 200, 240, 380, 500, 520, 680]));
     expect(hammingDistance(a, b)).toBeGreaterThan(SIMILAR_IMAGE_MAX_DISTANCE);
+  });
+
+  it('cupons com muito papel liso: a mesma foto sempre casa, outra nunca (40 sementes)', async () => {
+    const foto = (s: number) => {
+      const faixas = Array.from({ length: 9 }, (_, i) => {
+        const y = 40 + ((s * 37 + i * 101) % 800);
+        return `<rect x="${30 + ((s + i) % 5) * 20}" y="${y}" width="${300 + ((s * 13 + i * 29) % 200)}" height="16" fill="#222"/>`;
+      }).join('');
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="960"><rect width="600" height="960" fill="#f4f1ea"/>${faixas}</svg>`;
+      return sharp(Buffer.from(svg)).jpeg({ quality: 90 }).toBuffer();
+    };
+    for (let s = 0; s < 40; s++) {
+      const original = await foto(s);
+      const h = await perceptualHash(original);
+      const recomprimida = await perceptualHash(await sharp(original).resize(420).jpeg({ quality: 40 }).toBuffer());
+      expect(hammingDistance(h, recomprimida), `semente ${s}`).toBeLessThanOrEqual(SIMILAR_IMAGE_MAX_DISTANCE);
+      expect(hammingDistance(h, await perceptualHash(await foto(s + 7))), `semente ${s}`).toBeGreaterThan(SIMILAR_IMAGE_MAX_DISTANCE);
+    }
   });
 
   it('hash tem 16 dígitos hexadecimais e distância é simétrica', async () => {
